@@ -52,6 +52,7 @@ export function CreditsScreen() {
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
+  const [currentRemaining, setCurrentRemaining] = useState('');
   const [rate, setRate] = useState('');
   const [term, setTerm] = useState('24');
   const [issueDate, setIssueDate] = useState(new Date());
@@ -74,6 +75,7 @@ export function CreditsScreen() {
   const resetForm = () => {
     setName('');
     setAmount('');
+    setCurrentRemaining('');
     setRate('');
     setTerm('24');
     setIssueDate(new Date());
@@ -90,6 +92,7 @@ export function CreditsScreen() {
   const startEditCredit = (c: Credit) => {
     setName(c.name);
     setAmount(String(c.amount));
+    setCurrentRemaining(String(c.remaining));
     setRate(String(c.rate));
     setTerm(String(c.termMonths));
     setIssueDate(c.startDate);
@@ -127,6 +130,12 @@ export function CreditsScreen() {
     const rt = parseLocaleNumber(rate || '0');
     const tm = parseInt(term, 10) || 24;
     const existing = editingId ? allCredits.find((c) => c.id === editingId) : undefined;
+    // "Текущий остаток" даёт возможность завести уже действующий кредит/ипотеку не с нуля:
+    // если поле оставлено пустым, остаток по умолчанию равен полной сумме (как для нового
+    // кредита), но его можно указать вручную — тогда все дальнейшие платежи будут считаться
+    // именно от этой суммы, а не от исходной суммы кредита.
+    const enteredRemaining = currentRemaining.trim() ? parseLocaleNumber(currentRemaining) : NaN;
+    const remaining = !Number.isNaN(enteredRemaining) ? enteredRemaining : existing?.remaining ?? amt;
     await saveCredit({
       ...(editingId ? { id: editingId } : {}),
       kind: existing?.kind ?? formKind,
@@ -135,7 +144,7 @@ export function CreditsScreen() {
       rate: rt,
       termMonths: tm,
       monthlyPayment: calculateMonthlyPayment(amt, rt, tm),
-      remaining: existing?.remaining ?? amt,
+      remaining,
       // Дата следующего платежа теперь задаётся вручную (по умолчанию — через 30 дней),
       // чтобы совпадать с реальным днём списания, а не с произвольной датой создания записи.
       nextPaymentDate: nextPaymentDateInput,
@@ -354,6 +363,13 @@ export function CreditsScreen() {
     <Card>
       <FormInput label="Название" value={name} onChangeText={setName} />
       <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+      <FormInput
+        label="Текущий остаток долга (на сегодня)"
+        keyboardType="decimal-pad"
+        value={currentRemaining}
+        onChangeText={setCurrentRemaining}
+        placeholder="Если не заполнить — берётся вся сумма"
+      />
       <FormInput label="Ставка %" keyboardType="decimal-pad" value={rate} onChangeText={setRate} />
       <FormInput label="Срок (мес.)" keyboardType="numeric" value={term} onChangeText={setTerm} />
       <DateField label="Дата выдачи" value={issueDate} onChange={setIssueDate} />
