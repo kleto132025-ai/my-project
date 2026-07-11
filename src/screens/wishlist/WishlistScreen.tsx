@@ -16,6 +16,7 @@ import { formatCurrency } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
 import { confirmDelete } from '../../utils/confirm';
 import type { GoalPriority, WishStatus, WishlistItem } from '../../types';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 const STATUS_LABELS: Record<WishStatus, string> = {
   postponed: 'Откладываю',
@@ -62,10 +63,10 @@ export function WishlistScreen() {
     await saveWishlistItem({
       ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
-      price: parseFloat(price),
+      price: parseLocaleNumber(price),
       priority,
       status: existing?.status ?? 'postponed',
-      savedAmount: savedAmount ? parseFloat(savedAmount) : existing?.savedAmount ?? 0,
+      savedAmount: savedAmount ? parseLocaleNumber(savedAmount) : existing?.savedAmount ?? 0,
     } as WishlistItem);
     resetForm();
   };
@@ -110,8 +111,8 @@ export function WishlistScreen() {
       {showForm ? (
         <Card>
           <FormInput label="Название" value={name} onChangeText={setName} placeholder="Наушники" />
-          <FormInput label="Цена" keyboardType="numeric" value={price} onChangeText={setPrice} />
-          <FormInput label="Накоплено" keyboardType="numeric" value={savedAmount} onChangeText={setSavedAmount} placeholder="0" />
+          <FormInput label="Цена" keyboardType="decimal-pad" value={price} onChangeText={setPrice} />
+          <FormInput label="Накоплено" keyboardType="decimal-pad" value={savedAmount} onChangeText={setSavedAmount} placeholder="0" />
           <SegmentedControl
             value={priority}
             onChange={setPriority}

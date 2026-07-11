@@ -5,6 +5,7 @@ import {
   calculateGoalProgress,
   calculateMonthlyPayment,
   calculateTaxDeduction,
+  calculateAmortizationStep,
 } from '../utils/calculations';
 import type { Transaction } from '../types';
 
@@ -90,5 +91,34 @@ describe('calculateGoalProgress', () => {
 describe('calculateTaxDeduction', () => {
   it('applies default 13% rate', () => {
     expect(calculateTaxDeduction(100000)).toBe(13000);
+  });
+});
+
+describe('calculateAmortizationStep', () => {
+  it('splits a regular payment into interest and principal', () => {
+    // 300000 at 15% annual -> 3750 monthly interest on the full balance.
+    const step = calculateAmortizationStep(300000, 15, 14545.99);
+    expect(step.interestPortion).toBe(3750);
+    expect(step.principalPortion).toBeCloseTo(14545.99 - 3750, 2);
+    expect(step.newRemaining).toBeCloseTo(300000 - (14545.99 - 3750), 2);
+  });
+
+  it('never reduces principal below the outstanding balance', () => {
+    const step = calculateAmortizationStep(1000, 15, 1_000_000);
+    expect(step.newRemaining).toBe(0);
+    expect(step.principalPortion).toBe(1000);
+  });
+
+  it('does not let principal go negative when the payment does not cover interest', () => {
+    const step = calculateAmortizationStep(300000, 15, 100);
+    expect(step.principalPortion).toBe(0);
+    expect(step.newRemaining).toBe(300000);
+  });
+
+  it('treats a zero rate as pure principal repayment', () => {
+    const step = calculateAmortizationStep(1000, 0, 400);
+    expect(step.interestPortion).toBe(0);
+    expect(step.principalPortion).toBe(400);
+    expect(step.newRemaining).toBe(600);
   });
 });

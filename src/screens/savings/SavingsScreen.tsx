@@ -17,6 +17,7 @@ import { formatCurrency } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
 import { confirmDelete } from '../../utils/confirm';
 import type { AssetType, Goal, Deposit, Investment, CashbackCard } from '../../types';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'deposits' | 'investments' | 'goals' | 'cashback';
 
@@ -112,8 +113,8 @@ export function SavingsScreen() {
     await saveDeposit({
       ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
-      amount: parseFloat(amount),
-      rate: parseFloat(rate || '0'),
+      amount: parseLocaleNumber(amount),
+      rate: parseLocaleNumber(rate || '0'),
       openDate,
       closeDate,
     } as Deposit);
@@ -126,9 +127,9 @@ export function SavingsScreen() {
       ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
       assetType,
-      quantity: parseFloat(quantity),
-      purchasePrice: parseFloat(purchasePrice || '0'),
-      currentPrice: parseFloat(currentPrice || purchasePrice || '0'),
+      quantity: parseLocaleNumber(quantity),
+      purchasePrice: parseLocaleNumber(purchasePrice || '0'),
+      currentPrice: parseLocaleNumber(currentPrice || purchasePrice || '0'),
     } as Investment);
     resetForm();
   };
@@ -139,7 +140,7 @@ export function SavingsScreen() {
     await saveGoal({
       ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
-      targetAmount: parseFloat(amount),
+      targetAmount: parseLocaleNumber(amount),
       savedAmount: existing?.savedAmount ?? 0,
       deadline,
       priority: existing?.priority ?? 'medium',
@@ -156,7 +157,7 @@ export function SavingsScreen() {
     await saveCashbackCard({
       ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
-      cashbackPercent: parseFloat(rate),
+      cashbackPercent: parseLocaleNumber(rate),
       accumulated: existing?.accumulated ?? 0,
     } as CashbackCard);
     resetForm();
@@ -217,7 +218,7 @@ export function SavingsScreen() {
           {showForm ? (
             <Card>
               <FormInput label="Название" value={name} onChangeText={setName} placeholder="Новая машина" />
-              <FormInput label="Целевая сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
+              <FormInput label="Целевая сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               <DateField label="Срок" value={deadline} onChange={setDeadline} />
               <View style={styles.rowBetween}>
                 <Text style={{ color: theme.text }}>Цель с партнёром</Text>
@@ -259,8 +260,8 @@ export function SavingsScreen() {
           {showForm ? (
             <Card>
               <FormInput label="Название" value={name} onChangeText={setName} />
-              <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
-              <FormInput label="Ставка %" keyboardType="numeric" value={rate} onChangeText={setRate} />
+              <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+              <FormInput label="Ставка %" keyboardType="decimal-pad" value={rate} onChangeText={setRate} />
               <DateField label="Дата открытия" value={openDate} onChange={setOpenDate} />
               <DateField label="Дата закрытия" value={closeDate} onChange={setCloseDate} />
               <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить вклад'} onPress={handleAddDeposit} />
@@ -309,16 +310,16 @@ export function SavingsScreen() {
                 onChange={setAssetType}
                 options={ASSET_TYPES.map((a) => ({ label: ASSET_LABELS[a], value: a }))}
               />
-              <FormInput label="Количество" keyboardType="numeric" value={quantity} onChangeText={setQuantity} />
+              <FormInput label="Количество" keyboardType="decimal-pad" value={quantity} onChangeText={setQuantity} />
               <FormInput
                 label="Цена покупки"
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
                 value={purchasePrice}
                 onChangeText={setPurchasePrice}
               />
               <FormInput
                 label="Текущая цена"
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
                 value={currentPrice}
                 onChangeText={setCurrentPrice}
               />
@@ -355,7 +356,7 @@ export function SavingsScreen() {
           {showForm ? (
             <Card>
               <FormInput label="Название карты" value={name} onChangeText={setName} />
-              <FormInput label="Кэшбэк %" keyboardType="numeric" value={rate} onChangeText={setRate} />
+              <FormInput label="Кэшбэк %" keyboardType="decimal-pad" value={rate} onChangeText={setRate} />
               <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить карту'} onPress={handleAddCashback} />
               <View style={{ height: spacing.sm }} />
               <AppButton title="Отмена" variant="outline" onPress={resetForm} />

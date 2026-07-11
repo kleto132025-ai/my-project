@@ -19,6 +19,7 @@ import { calculateLoanRemaining, calculateMonthlyPayment } from '../../utils/cal
 import { schedulePaymentReminders, scheduleReminder, requestNotificationPermissions } from '../../utils/notifications';
 import { confirmDelete } from '../../utils/confirm';
 import type { DebtStatus, Credit, CreditKind, FriendDebt, InsurancePolicy } from '../../types';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'credits' | 'mortgage' | 'calendar' | 'debts' | 'insurance';
 
@@ -42,6 +43,7 @@ export function CreditsScreen() {
   const removeFriendDebt = useFinanceStore((s) => s.removeFriendDebt);
   const removeInsurancePolicy = useFinanceStore((s) => s.removeInsurancePolicy);
   const repayCredit = useFinanceStore((s) => s.repayCredit);
+  const makePayment = useFinanceStore((s) => s.makePayment);
 
   const credits = useMemo(() => allCredits.filter((c) => c.kind === 'credit'), [allCredits]);
   const mortgages = useMemo(() => allCredits.filter((c) => c.kind === 'mortgage'), [allCredits]);
@@ -63,6 +65,11 @@ export function CreditsScreen() {
   const [endDate, setEndDate] = useState(new Date(Date.now() + 90 * 24 * 3600 * 1000));
   const [earlyRepayAmount, setEarlyRepayAmount] = useState('');
   const [repayDate, setRepayDate] = useState(new Date());
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date());
+  const [nextPaymentDateInput, setNextPaymentDateInput] = useState(
+    new Date(Date.now() + 30 * 24 * 3600 * 1000)
+  );
 
   const resetForm = () => {
     setName('');
@@ -75,6 +82,7 @@ export function CreditsScreen() {
     setPersonName('');
     setInsuranceType('');
     setInsurer('');
+    setNextPaymentDateInput(new Date(Date.now() + 30 * 24 * 3600 * 1000));
     setShowForm(false);
     setEditingId(null);
   };
@@ -85,6 +93,7 @@ export function CreditsScreen() {
     setRate(String(c.rate));
     setTerm(String(c.termMonths));
     setIssueDate(c.startDate);
+    setNextPaymentDateInput(c.nextPaymentDate);
     setPropertyAddress(c.propertyAddress ?? '');
     setDownPayment(c.downPayment !== undefined ? String(c.downPayment) : '');
     setEditingId(c.id);
@@ -114,15 +123,10 @@ export function CreditsScreen() {
 
   const handleAddCredit = async () => {
     if (!name.trim() || !amount) return;
-    const amt = parseFloat(amount);
-    const rt = parseFloat(rate || '0');
+    const amt = parseLocaleNumber(amount);
+    const rt = parseLocaleNumber(rate || '0');
     const tm = parseInt(term, 10) || 24;
     const existing = editingId ? allCredits.find((c) => c.id === editingId) : undefined;
-    const nextPaymentDate = existing?.nextPaymentDate ?? (() => {
-      const d = new Date();
-      d.setMonth(d.getMonth() + 1);
-      return d;
-    })();
     await saveCredit({
       ...(editingId ? { id: editingId } : {}),
       kind: existing?.kind ?? formKind,
@@ -132,20 +136,30 @@ export function CreditsScreen() {
       termMonths: tm,
       monthlyPayment: calculateMonthlyPayment(amt, rt, tm),
       remaining: existing?.remaining ?? amt,
-      nextPaymentDate,
+      // Дата следующего платежа теперь задаётся вручную (по умолчанию — через 30 дней),
+      // чтобы совпадать с реальным днём списания, а не с произвольной датой создания записи.
+      nextPaymentDate: nextPaymentDateInput,
       startDate: issueDate,
       propertyAddress: formKind === 'mortgage' ? propertyAddress.trim() || undefined : undefined,
-      downPayment: formKind === 'mortgage' && downPayment ? parseFloat(downPayment) : undefined,
+      downPayment: formKind === 'mortgage' && downPayment ? parseLocaleNumber(downPayment) : undefined,
     } as Credit);
     resetForm();
   };
 
   const handleRepay = async (creditId: string) => {
-    const repayAmount = parseFloat(earlyRepayAmount);
+    const repayAmount = parseLocaleNumber(earlyRepayAmount);
     if (Number.isNaN(repayAmount) || repayAmount <= 0) return;
     await repayCredit(creditId, repayAmount, repayDate);
     setEarlyRepayAmount('');
     setRepayDate(new Date());
+  };
+
+  const handleMakePayment = async (creditId: string) => {
+    const payAmount = parseLocaleNumber(paymentAmount);
+    if (Number.isNaN(payAmount) || payAmount <= 0) return;
+    await makePayment(creditId, payAmount, paymentDate);
+    setPaymentAmount('');
+    setPaymentDate(new Date());
   };
 
   const handleAddDebt = async () => {
@@ -154,7 +168,7 @@ export function CreditsScreen() {
     await saveFriendDebt({
       ...(editingId ? { id: editingId } : {}),
       personName: personName.trim(),
-      amount: parseFloat(amount),
+      amount: parseLocaleNumber(amount),
       status: debtStatus,
       isPaid: existing?.isPaid ?? false,
       reminderDate,
@@ -172,7 +186,7 @@ export function CreditsScreen() {
       ...(editingId ? { id: editingId } : {}),
       type: insuranceType.trim(),
       insurer: insurer.trim(),
-      amount: parseFloat(amount),
+      amount: parseLocaleNumber(amount),
       endDate,
     } as InsurancePolicy);
     if (!editingId) {
@@ -218,6 +232,7 @@ export function CreditsScreen() {
         </View>
         <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
           Дата выдачи: {c.startDate.toLocaleDateString('ru-RU')}
+          {c.remaining > 0 ? ` · Следующий платёж: ${c.nextPaymentDate.toLocaleDateString('ru-RU')}` : ''}
         </Text>
         {c.kind === 'mortgage' && (c.propertyAddress || c.downPayment !== undefined) && (
           <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
@@ -238,7 +253,13 @@ export function CreditsScreen() {
         <AppButton
           title={isExpanded ? 'Скрыть график' : 'График погашения'}
           variant="outline"
-          onPress={() => setExpandedCreditId(isExpanded ? null : c.id)}
+          onPress={() => {
+            if (!isExpanded) {
+              setPaymentAmount(String(c.monthlyPayment));
+              setPaymentDate(c.nextPaymentDate);
+            }
+            setExpandedCreditId(isExpanded ? null : c.id);
+          }}
         />
         {isExpanded && (
           <View style={{ marginTop: spacing.sm }}>
@@ -277,7 +298,7 @@ export function CreditsScreen() {
                     </Text>
                     <Text style={{ color: theme.text, fontSize: 12 }}>{formatCurrency(r.amount, currency)}</Text>
                     <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                      {r.type === 'full' ? 'Полное' : 'Частичное'}
+                      {r.type === 'full' ? 'Полное' : r.type === 'regular' ? 'Регулярный' : 'Частичное'}
                     </Text>
                   </View>
                 ))}
@@ -286,9 +307,29 @@ export function CreditsScreen() {
 
             {c.remaining > 0 && (
               <View style={{ marginTop: spacing.sm }}>
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
+                  Внести платёж
+                </Text>
+                <FormInput
+                  label="Сумма платежа"
+                  keyboardType="decimal-pad"
+                  value={paymentAmount}
+                  onChangeText={setPaymentAmount}
+                  placeholder="Сумма"
+                />
+                <DateField label="Дата платежа" value={paymentDate} onChange={setPaymentDate} />
+                <AppButton title="Внести платёж" onPress={() => handleMakePayment(c.id)} />
+              </View>
+            )}
+
+            {c.remaining > 0 && (
+              <View style={{ marginTop: spacing.sm }}>
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
+                  Досрочное погашение
+                </Text>
                 <FormInput
                   label="Сумма досрочного погашения"
-                  keyboardType="numeric"
+                  keyboardType="decimal-pad"
                   value={earlyRepayAmount}
                   onChangeText={setEarlyRepayAmount}
                   placeholder="Сумма"
@@ -306,14 +347,15 @@ export function CreditsScreen() {
   const renderCreditForm = (submitLabel: string) => (
     <Card>
       <FormInput label="Название" value={name} onChangeText={setName} />
-      <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
-      <FormInput label="Ставка %" keyboardType="numeric" value={rate} onChangeText={setRate} />
+      <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+      <FormInput label="Ставка %" keyboardType="decimal-pad" value={rate} onChangeText={setRate} />
       <FormInput label="Срок (мес.)" keyboardType="numeric" value={term} onChangeText={setTerm} />
       <DateField label="Дата выдачи" value={issueDate} onChange={setIssueDate} />
+      <DateField label="Дата следующего платежа" value={nextPaymentDateInput} onChange={setNextPaymentDateInput} />
       {formKind === 'mortgage' && (
         <>
           <FormInput label="Объект недвижимости" value={propertyAddress} onChangeText={setPropertyAddress} placeholder="Адрес или описание" />
-          <FormInput label="Первоначальный взнос" keyboardType="numeric" value={downPayment} onChangeText={setDownPayment} />
+          <FormInput label="Первоначальный взнос" keyboardType="decimal-pad" value={downPayment} onChangeText={setDownPayment} />
         </>
       )}
       <AppButton title={isEditing ? 'Сохранить изменения' : submitLabel} onPress={handleAddCredit} />
@@ -415,7 +457,7 @@ export function CreditsScreen() {
           {showForm ? (
             <Card>
               <FormInput label="Имя" value={personName} onChangeText={setPersonName} />
-              <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
+              <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               <SegmentedControl
                 value={debtStatus}
                 onChange={setDebtStatus}
@@ -460,7 +502,7 @@ export function CreditsScreen() {
             <Card>
               <FormInput label="Тип полиса" value={insuranceType} onChangeText={setInsuranceType} placeholder="ОСАГО" />
               <FormInput label="Страховщик" value={insurer} onChangeText={setInsurer} />
-              <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
+              <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               <DateField label="Дата окончания" value={endDate} onChange={setEndDate} />
               <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить полис'} onPress={handleAddInsurance} />
               <View style={{ height: spacing.sm }} />

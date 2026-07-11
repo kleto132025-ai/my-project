@@ -21,7 +21,7 @@ import type {
 import * as repo from '../database/repository';
 import { seedDemoDataIfNeeded, SEED_FLAG_KEY } from '../database/seed';
 import { setMeta } from '../database/client';
-import { calculateGoalProgress } from '../utils/calculations';
+import { calculateGoalProgress, calculateAmortizationStep } from '../utils/calculations';
 
 interface FinanceState {
   isLoaded: boolean;
@@ -55,6 +55,12 @@ interface FinanceState {
   removeCredit: (id: string) => Promise<void>;
   /** Записывает частичное/полное досрочное погашение (с датой) и уменьшает остаток по кредиту. */
   repayCredit: (creditId: string, amount: number, date: Date) => Promise<void>;
+  /**
+   * Записывает обычный плановый платёж: часть суммы уходит на проценты, часть — на основной долг
+   * (в отличие от repayCredit, где вся сумма считается досрочным погашением тела кредита).
+   * Также сдвигает дату следующего платежа на месяц вперёд, чтобы календарь оставался актуальным.
+   */
+  makePayment: (creditId: string, amount: number, date: Date) => Promise<void>;
 
   saveBudgetLimit: (b: BudgetLimit | Omit<BudgetLimit, 'id'>) => Promise<void>;
   removeBudgetLimit: (id: string) => Promise<void>;
@@ -198,6 +204,35 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       date,
       amount,
       type: isFull ? 'full' : 'partial',
+    };
+    await repo.insertCreditRepayment(repayment);
+
+    set((state) => ({
+      credits: state.credits.map((c) => (c.id === creditId ? updatedCredit : c)),
+      creditRepayments: [repayment, ...state.creditRepayments],
+    }));
+    await get().checkAndUnlockAchievements();
+  },
+
+  makePayment: async (creditId, amount, date) => {
+    const credit = get().credits.find((c) => c.id === creditId);
+    if (!credit || amount <= 0) return;
+
+    const { newRemaining } = calculateAmortizationStep(credit.remaining, credit.rate, amount);
+    const isFull = newRemaining <= 0;
+
+    const nextPaymentDate = new Date(credit.nextPaymentDate);
+    nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+
+    const updatedCredit: Credit = { ...credit, remaining: newRemaining, nextPaymentDate };
+    await repo.upsertCredit(updatedCredit);
+
+    const repayment: CreditRepayment = {
+      id: generateId(),
+      creditId,
+      date,
+      amount,
+      type: isFull ? 'full' : 'regular',
     };
     await repo.insertCreditRepayment(repayment);
 

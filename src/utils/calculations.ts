@@ -77,3 +77,25 @@ export function calculateMonthlyPayment(amount: number, rate: number, termMonths
 export function calculateTaxDeduction(amount: number, rate = 0.13): number {
   return Math.round(amount * rate * 100) / 100;
 }
+
+export interface AmortizationStep {
+  interestPortion: number;
+  principalPortion: number;
+  newRemaining: number;
+}
+
+// Разбивает регулярный платёж на проценты и погашение основного долга (стандартная схема
+// аннуитета): сначала списываются проценты, начисленные на текущий остаток, оставшаяся часть
+// платежа уменьшает сам долг. Без этого шага "остаток" по кредиту никогда не двигался бы от
+// обычных ежемесячных платежей — только от досрочных погашений, что и давало неверные суммы.
+export function calculateAmortizationStep(
+  remaining: number,
+  rate: number,
+  paymentAmount: number
+): AmortizationStep {
+  const monthlyRate = rate / 100 / 12;
+  const interestPortion = Math.round(remaining * monthlyRate * 100) / 100;
+  const principalPortion = Math.max(Math.min(paymentAmount - interestPortion, remaining), 0);
+  const newRemaining = Math.max(Math.round((remaining - principalPortion) * 100) / 100, 0);
+  return { interestPortion, principalPortion, newRemaining };
+}

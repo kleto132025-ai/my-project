@@ -13,6 +13,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { formatCurrency } from '../../utils/format';
 import { DEFAULT_INCOME_CATEGORIES } from '../../theme/categoryIcons';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 const TOTAL_STEPS = 4;
 
@@ -37,7 +38,7 @@ export function OnboardingScreen() {
   const skip = () => setStep((s) => Math.min(s + 1, TOTAL_STEPS));
 
   const handleAddIncome = async () => {
-    const amount = parseFloat(incomeAmount);
+    const amount = parseLocaleNumber(incomeAmount);
     if (!Number.isNaN(amount) && amount > 0) {
       await addTransaction({
         amount,
@@ -61,7 +62,7 @@ export function OnboardingScreen() {
   };
 
   const handleCreateGoal = async () => {
-    const amount = parseFloat(goalAmount);
+    const amount = parseLocaleNumber(goalAmount);
     if (goalName.trim().length > 0 && !Number.isNaN(amount) && amount > 0) {
       const deadline = new Date();
       deadline.setMonth(deadline.getMonth() + 6);
@@ -91,7 +92,7 @@ export function OnboardingScreen() {
           </Text>
           <FormInput
             label="Сумма"
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
             value={incomeAmount}
             onChangeText={setIncomeAmount}
             placeholder="Например, 85000"
@@ -138,7 +139,7 @@ export function OnboardingScreen() {
           <FormInput label="Название" value={goalName} onChangeText={setGoalName} placeholder="Путешествие" />
           <FormInput
             label="Сумма"
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
             value={goalAmount}
             onChangeText={setGoalAmount}
             placeholder="100000"

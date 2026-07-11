@@ -18,6 +18,7 @@ import { confirmDelete } from '../../utils/confirm';
 import { useBudgetLimitsWithSpent } from '../../hooks/useFinancials';
 import { DEFAULT_EXPENSE_CATEGORIES } from '../../theme/categoryIcons';
 import type { BudgetLimit, BudgetPeriod } from '../../types';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 function daysRemainingInMonth(): number {
   const now = new Date();
@@ -91,7 +92,7 @@ export function BudgetScreen() {
     await saveBudgetLimit({
       ...(editingId ? { id: editingId } : {}),
       category: category.trim(),
-      limit: parseFloat(limitAmount),
+      limit: parseLocaleNumber(limitAmount),
       spent: 0,
       period,
     } as BudgetLimit);
@@ -140,7 +141,7 @@ export function BudgetScreen() {
       {showForm ? (
         <Card>
           <CategoryPicker categories={DEFAULT_EXPENSE_CATEGORIES} selected={category} onSelect={setCategory} />
-          <FormInput label="Лимит" keyboardType="numeric" value={limitAmount} onChangeText={setLimitAmount} />
+          <FormInput label="Лимит" keyboardType="decimal-pad" value={limitAmount} onChangeText={setLimitAmount} />
           <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить лимит'} onPress={handleAddLimit} />
           <View style={{ height: spacing.sm }} />
           <AppButton title="Отмена" variant="outline" onPress={resetForm} />

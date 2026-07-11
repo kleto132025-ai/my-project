@@ -47,7 +47,7 @@ export interface Credit {
   downPayment?: number;
 }
 
-export type CreditRepaymentType = 'partial' | 'full';
+export type CreditRepaymentType = 'regular' | 'partial' | 'full';
 
 export interface CreditRepayment {
   id: string;

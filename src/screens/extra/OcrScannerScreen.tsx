@@ -12,6 +12,7 @@ import { spacing, radius } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { DEFAULT_EXPENSE_CATEGORIES } from '../../theme/categoryIcons';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 export function OcrScannerScreen() {
   const theme = useTheme();
@@ -32,7 +33,7 @@ export function OcrScannerScreen() {
   };
 
   const handleSave = async () => {
-    const parsed = parseFloat(amount);
+    const parsed = parseLocaleNumber(amount);
     if (Number.isNaN(parsed) || parsed <= 0) return;
     await addTransaction({ amount: parsed, category, type: 'expense', date: new Date(), currency, comment: 'Скан чека' });
     navigation.goBack();
@@ -60,7 +61,7 @@ export function OcrScannerScreen() {
       {photoUri ? (
         <Card>
           <Image source={{ uri: photoUri }} style={styles.preview} />
-          <FormInput label="Сумма по чеку" keyboardType="numeric" value={amount} onChangeText={setAmount} />
+          <FormInput label="Сумма по чеку" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
           <CategoryPicker categories={DEFAULT_EXPENSE_CATEGORIES} selected={category} onSelect={setCategory} />
           <AppButton title="Сохранить расход" onPress={handleSave} />
           <View style={{ height: spacing.sm }} />

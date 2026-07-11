@@ -16,6 +16,7 @@ import { useAuthStore } from '../../store/authStore';
 import { exportJsonFile, exportTransactionsCsv, importJsonFile } from '../../utils/exportData';
 import { generateAndSharePdfReport } from '../../utils/report';
 import type { Currency, ThemeScheme, AuthMethod } from '../../types';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 const CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR'];
 const SCHEME_LABELS: Record<ThemeScheme, string> = { blue: 'Синяя', maroon: 'Бордовая', green: 'Зелёная', purple: 'Фиолетовая' };
@@ -101,9 +102,9 @@ export function SettingsScreen() {
         {settings.currency !== 'RUB' && (
           <FormInput
             label={`Курс ${settings.currency} к RUB`}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
             value={String(settings.exchangeRates[settings.currency])}
-            onChangeText={(v) => settings.setExchangeRate(settings.currency, parseFloat(v) || 0)}
+            onChangeText={(v) => settings.setExchangeRate(settings.currency, parseLocaleNumber(v) || 0)}
           />
         )}
       </Card>

@@ -17,6 +17,7 @@ import { validateTransaction, isDuplicateTransaction } from '../../utils/validat
 import { playCoinSound } from '../../utils/sound';
 import { vibrateSuccess } from '../../utils/haptics';
 import type { Transaction, TransactionType } from '../../types';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 export function AddTransactionScreen() {
   const theme = useTheme();
@@ -56,7 +57,7 @@ export function AddTransactionScreen() {
   const canSave = useMemo(() => amount.length > 0 && category.trim().length > 0, [amount, category]);
 
   const handleSave = async () => {
-    const parsedAmount = parseFloat(amount.replace(',', '.'));
+    const parsedAmount = parseLocaleNumber(amount);
     const candidate = {
       id: editingTransaction?.id ?? 'pending',
       amount: parsedAmount,
@@ -111,7 +112,7 @@ export function AddTransactionScreen() {
       />
       <FormInput
         label="Сумма"
-        keyboardType="numeric"
+        keyboardType="decimal-pad"
         value={amount}
         onChangeText={setAmount}
         placeholder="0"

@@ -16,6 +16,7 @@ import { formatCurrency } from '../../utils/format';
 import { confirmDelete } from '../../utils/confirm';
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from '../../theme/categoryIcons';
 import type { RecurringTemplate, TransactionType } from '../../types';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 export function RecurringTemplatesScreen() {
   const theme = useTheme();
@@ -61,7 +62,7 @@ export function RecurringTemplatesScreen() {
     await saveTemplate({
       ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
-      amount: parseFloat(amount),
+      amount: parseLocaleNumber(amount),
       category: category.trim(),
       type,
       everyDay: parseInt(everyDay, 10) || 30,
@@ -123,7 +124,7 @@ export function RecurringTemplatesScreen() {
             ]}
           />
           <FormInput label="Название" value={name} onChangeText={setName} placeholder="Коммуналка" />
-          <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
+          <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
           <CategoryPicker categories={categories} selected={category} onSelect={setCategory} />
           <FormInput label="Периодичность (дней)" keyboardType="numeric" value={everyDay} onChangeText={setEveryDay} />
           <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить шаблон'} onPress={handleAdd} />

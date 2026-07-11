@@ -8,13 +8,14 @@ import { spacing } from '../../theme';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency } from '../../utils/format';
 import { calculateTaxDeduction } from '../../utils/calculations';
+import { parseLocaleNumber } from '../../utils/parseNumber';
 
 export function TaxCalculatorScreen() {
   const theme = useTheme();
   const currency = useSettingsStore((s) => s.currency);
   const [amount, setAmount] = useState('');
 
-  const parsed = parseFloat(amount) || 0;
+  const parsed = parseLocaleNumber(amount) || 0;
   const deduction = calculateTaxDeduction(parsed);
 
   return (
@@ -23,7 +24,7 @@ export function TaxCalculatorScreen() {
         <Text style={{ color: theme.textMuted, marginBottom: spacing.md }}>
           Расчёт налогового вычета 13% (например, по ИИС или расходам на лечение/обучение)
         </Text>
-        <FormInput label="Сумма расходов" keyboardType="numeric" value={amount} onChangeText={setAmount} placeholder="100000" />
+        <FormInput label="Сумма расходов" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="100000" />
         <Text style={[styles.result, { color: theme.text }]}>
           Вычет: <Text style={{ color: theme.accent, fontWeight: '800' }}>{formatCurrency(deduction, currency)}</Text>
         </Text>
