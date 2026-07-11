@@ -4,12 +4,19 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { Transaction, Currency } from '../types';
 import { formatCurrency } from './format';
+import { normalizeTransactionsToCurrency } from './currency';
+
+const IDENTITY_RATES: Record<Currency, number> = { RUB: 1, USD: 1, EUR: 1 };
 
 export async function generateAndSharePdfReport(
   title: string,
-  transactions: Transaction[],
-  currency: Currency
+  rawTransactions: Transaction[],
+  currency: Currency,
+  rates: Record<Currency, number> = IDENTITY_RATES
 ): Promise<void> {
+  // Приводим суммы к валюте отчёта здесь же — вызывающий код может передать транзакции
+  // как есть, без предварительной нормализации.
+  const transactions = normalizeTransactionsToCurrency(rawTransactions, currency, rates);
   const totalIncome = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 

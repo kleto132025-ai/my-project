@@ -13,6 +13,7 @@ import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency } from '../../utils/format';
 import { vibrateWarning } from '../../utils/haptics';
+import { useBudgetLimitsWithSpent } from '../../hooks/useFinancials';
 import { DEFAULT_EXPENSE_CATEGORIES } from '../../theme/categoryIcons';
 import type { BudgetPeriod } from '../../types';
 
@@ -26,7 +27,6 @@ export function BudgetScreen() {
   const theme = useTheme();
   const currency = useSettingsStore((s) => s.currency);
   const vibrationEnabled = useSettingsStore((s) => s.vibrationEnabled);
-  const budgetLimits = useFinanceStore((s) => s.budgetLimits);
   const notifications = useFinanceStore((s) => s.notifications);
   const saveBudgetLimit = useFinanceStore((s) => s.saveBudgetLimit);
   const addNotification = useFinanceStore((s) => s.addNotification);
@@ -35,6 +35,11 @@ export function BudgetScreen() {
   const [category, setCategory] = useState('');
   const [limitAmount, setLimitAmount] = useState('');
   const [period] = useState<BudgetPeriod>('month');
+
+  // "spent" в хранилище — это снимок на момент создания лимита (или демо-данные) и никогда
+  // не обновляется при добавлении новых транзакций. useBudgetLimitsWithSpent пересчитывает
+  // его из реальных трат за текущий календарный период, чтобы прогресс-бары не "замерзали".
+  const budgetLimits = useBudgetLimitsWithSpent();
 
   useEffect(() => {
     budgetLimits.forEach(async (limit) => {

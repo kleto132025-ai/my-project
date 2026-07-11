@@ -41,6 +41,10 @@ export function MainDrawer() {
         drawerActiveTintColor: theme.accent,
         drawerInactiveTintColor: theme.textMuted,
         drawerActiveBackgroundColor: theme.accent + '1A',
+        // Drawer.Navigator рисует свою панель поверх экранов отдельным нативным View,
+        // поэтому цвет фона нужно задавать явно — иначе в тёмной теме панель останется белой.
+        drawerStyle: { backgroundColor: theme.card },
+        sceneStyle: { backgroundColor: theme.background },
       }}
     >
       <Drawer.Screen

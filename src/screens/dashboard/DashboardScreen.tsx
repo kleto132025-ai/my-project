@@ -9,7 +9,6 @@ import { EmptyState } from '../../components/EmptyState';
 import { useTheme } from '../../theme';
 import { spacing } from '../../theme';
 import { useSettingsStore } from '../../store/settingsStore';
-import { useFinanceStore } from '../../store/financeStore';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import {
   useFreeFunds,
@@ -17,6 +16,7 @@ import {
   useRecentTransactions,
   useTopCategories,
   useForecast,
+  useBudgetLimitsWithSpent,
 } from '../../hooks/useFinancials';
 import type { Transaction } from '../../types';
 
@@ -26,7 +26,7 @@ const keyExtractor = (item: Transaction) => item.id;
 export function DashboardScreen() {
   const theme = useTheme();
   const currency = useSettingsStore((s) => s.currency);
-  const budgetLimits = useFinanceStore((s) => s.budgetLimits);
+  const budgetLimits = useBudgetLimitsWithSpent();
 
   const freeFunds = useFreeFunds();
   const today = useTodaySummary();
@@ -35,12 +35,25 @@ export function DashboardScreen() {
   const topIncomes = useTopCategories('income', 3);
   const forecast = useForecast(1);
 
+  const isNegative = freeFunds < 0;
+
   return (
     <ScreenContainer>
       <Card style={[styles.balanceCard, { backgroundColor: theme.primary }]}>
         <Text style={styles.balanceLabel}>Свободные средства</Text>
-        <Text style={styles.balanceAmount}>{formatCurrency(freeFunds, currency)}</Text>
-        <Text style={styles.balanceHint}>Доходы − Расходы − Кредиты − Отчисления в цели</Text>
+        <Text style={[styles.balanceAmount, isNegative && { color: '#FCA5A5' }]}>
+          {formatCurrency(freeFunds, currency)}
+        </Text>
+        {isNegative ? (
+          <View style={styles.warningRow}>
+            <Ionicons name="alert-circle-outline" size={14} color="#FCA5A5" />
+            <Text style={styles.warningText}>
+              Обязательства по кредитам и целям превышают текущий баланс
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.balanceHint}>Доходы − Расходы − Кредиты − Отчисления в цели</Text>
+        )}
       </Card>
 
       <Card>
@@ -145,6 +158,8 @@ const styles = StyleSheet.create({
   balanceLabel: { color: '#E2E8F0', fontSize: 14, marginBottom: 4 },
   balanceAmount: { color: '#FFFFFF', fontSize: 30, fontWeight: '800' },
   balanceHint: { color: '#CBD5E1', fontSize: 11, marginTop: spacing.sm },
+  warningRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
+  warningText: { color: '#FCA5A5', fontSize: 11, flexShrink: 1 },
   sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: spacing.sm },
   todayRow: { flexDirection: 'row', justifyContent: 'space-around' },
   todayItem: { alignItems: 'center', gap: 4 },

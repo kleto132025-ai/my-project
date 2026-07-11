@@ -10,6 +10,7 @@ import { spacing } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatPercent } from '../../utils/format';
+import { normalizeTransactionsToCurrency } from '../../utils/currency';
 import type { Transaction } from '../../types';
 
 type Granularity = 'month' | 'quarter' | 'year';
@@ -39,8 +40,13 @@ const OFFSET_OPTIONS = [
 
 export function PeriodComparisonScreen() {
   const theme = useTheme();
-  const transactions = useFinanceStore((s) => s.transactions);
+  const rawTransactions = useFinanceStore((s) => s.transactions);
   const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
+  const transactions = useMemo(
+    () => normalizeTransactionsToCurrency(rawTransactions, currency, rates),
+    [rawTransactions, currency, rates]
+  );
 
   const [granularity, setGranularity] = useState<Granularity>('month');
   const [offset1, setOffset1] = useState('0');

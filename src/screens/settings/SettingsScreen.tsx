@@ -58,7 +58,7 @@ export function SettingsScreen() {
   };
 
   const handleExportPdf = async () => {
-    await generateAndSharePdfReport('Полный отчёт', financeState.transactions, settings.currency);
+    await generateAndSharePdfReport('Полный отчёт', financeState.transactions, settings.currency, settings.exchangeRates);
   };
 
   const handleImport = async () => {

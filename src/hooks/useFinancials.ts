@@ -1,14 +1,30 @@
 import { useMemo } from 'react';
 import { useFinanceStore } from '../store/financeStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { calculateBalance, calculateForecast } from '../utils/calculations';
-import type { Transaction } from '../types';
+import { normalizeTransactionsToCurrency } from '../utils/currency';
+import { withComputedSpent } from '../utils/budget';
+import type { BudgetLimit, Transaction } from '../types';
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-export function useFreeFunds(): number {
+// Транзакции могли быть созданы в разной валюте (если пользователь менял валюту в настройках),
+// поэтому перед любой сводной цифрой (баланс, сумма по категориям, прогноз) их нужно привести
+// к одной, текущей валюте отображения — иначе суммирование 100 ₽ и 100 $ как «200» было бы неверным.
+function useNormalizedTransactions(): Transaction[] {
   const transactions = useFinanceStore((s) => s.transactions);
+  const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
+  return useMemo(
+    () => normalizeTransactionsToCurrency(transactions, currency, rates),
+    [transactions, currency, rates]
+  );
+}
+
+export function useFreeFunds(): number {
+  const transactions = useNormalizedTransactions();
   const credits = useFinanceStore((s) => s.credits);
   const goals = useFinanceStore((s) => s.goals);
 
@@ -24,7 +40,7 @@ export function useFreeFunds(): number {
 }
 
 export function useTodaySummary(): { income: number; expense: number } {
-  const transactions = useFinanceStore((s) => s.transactions);
+  const transactions = useNormalizedTransactions();
   return useMemo(() => {
     const today = new Date();
     const todaysTx = transactions.filter((t) => isSameDay(t.date, today));
@@ -36,7 +52,7 @@ export function useTodaySummary(): { income: number; expense: number } {
 }
 
 export function useRecentTransactions(count = 5): Transaction[] {
-  const transactions = useFinanceStore((s) => s.transactions);
+  const transactions = useNormalizedTransactions();
   return useMemo(() => transactions.slice(0, count), [transactions, count]);
 }
 
@@ -47,7 +63,7 @@ export interface CategoryTotal {
 }
 
 export function useTopCategories(type: 'income' | 'expense', count = 3): CategoryTotal[] {
-  const transactions = useFinanceStore((s) => s.transactions);
+  const transactions = useNormalizedTransactions();
   return useMemo(() => {
     const filtered = transactions.filter((t) => t.type === type);
     const totalsByCategory = new Map<string, number>();
@@ -67,6 +83,12 @@ export function useTopCategories(type: 'income' | 'expense', count = 3): Categor
 }
 
 export function useForecast(months = 1): number {
-  const transactions = useFinanceStore((s) => s.transactions);
+  const transactions = useNormalizedTransactions();
   return useMemo(() => calculateForecast(transactions, months), [transactions, months]);
+}
+
+export function useBudgetLimitsWithSpent(): BudgetLimit[] {
+  const limits = useFinanceStore((s) => s.budgetLimits);
+  const transactions = useNormalizedTransactions();
+  return useMemo(() => withComputedSpent(limits, transactions), [limits, transactions]);
 }

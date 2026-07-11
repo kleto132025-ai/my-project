@@ -20,6 +20,34 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Приложению нужен доступ к камере, чтобы фотографировать чеки."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Приложению нужен доступ к галерее, чтобы выбрать фото профиля.",
+          "cameraPermission": "Приложению нужен доступ к камере, чтобы сделать фото профиля."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Приложение использует Face ID для быстрого и безопасного входа."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1E3A5F"
+        }
+      ]
+    ]
   }
 }

@@ -7,12 +7,17 @@ import { useTheme } from '../theme';
 import { spacing, radius } from '../theme';
 import { getCategoryIcon } from '../theme/categoryIcons';
 import { formatCurrency } from '../utils/format';
+import { convertAmount } from '../utils/currency';
 import { useSettingsStore } from '../store/settingsStore';
 import type { Transaction } from '../types';
 
 export function TransactionRow({ transaction }: { transaction: Transaction }) {
   const theme = useTheme();
   const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
+  // Транзакция хранит валюту, в которой её создали; конвертируем в текущую отображаемую
+  // валюту здесь же, чтобы строка была верной независимо от того, нормализовал ли её вызывающий код.
+  const displayAmount = convertAmount(transaction.amount, transaction.currency, currency, rates);
   const isExpense = transaction.type === 'expense';
   const color = isExpense ? theme.expenseColor : theme.incomeColor;
   const iconName = getCategoryIcon(transaction.category, transaction.type);
@@ -33,7 +38,7 @@ export function TransactionRow({ transaction }: { transaction: Transaction }) {
       </View>
       <Text style={[styles.amount, { color }]}>
         {isExpense ? '-' : '+'}
-        {formatCurrency(transaction.amount, currency)}
+        {formatCurrency(displayAmount, currency)}
       </Text>
     </View>
   );

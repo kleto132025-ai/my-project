@@ -12,6 +12,7 @@ import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import { calculateForecast } from '../../utils/calculations';
+import { normalizeTransactionsToCurrency } from '../../utils/currency';
 import { generateAndSharePdfReport } from '../../utils/report';
 import type { Transaction } from '../../types';
 
@@ -43,9 +44,17 @@ function groupByCategory(transactions: Transaction[]): { category: string; total
 
 export function AnalyticsScreen() {
   const theme = useTheme();
-  const transactions = useFinanceStore((s) => s.transactions);
+  const rawTransactions = useFinanceStore((s) => s.transactions);
   const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
   const [period, setPeriod] = useState<Period>('month');
+
+  // Приводим все суммы к текущей валюте отображения до любых группировок и графиков —
+  // иначе транзакции, заведённые в разных валютах, суммировались бы напрямую как одинаковые.
+  const transactions = useMemo(
+    () => normalizeTransactionsToCurrency(rawTransactions, currency, rates),
+    [rawTransactions, currency, rates]
+  );
 
   const currentPeriodTx = useMemo(() => {
     const start = periodStart(period);
@@ -118,7 +127,8 @@ export function AnalyticsScreen() {
       await generateAndSharePdfReport(
         `Отчёт за ${period === 'month' ? 'месяц' : period === 'quarter' ? 'квартал' : 'год'}`,
         currentPeriodTx,
-        currency
+        currency,
+        rates
       );
     } catch {
       Alert.alert('Не удалось сформировать отчёт', 'Попробуйте ещё раз позже');
