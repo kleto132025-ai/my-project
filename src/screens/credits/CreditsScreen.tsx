@@ -15,7 +15,7 @@ import { spacing } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency } from '../../utils/format';
-import { calculateLoanRemaining, calculateMonthlyPayment } from '../../utils/calculations';
+import { calculateAmortizationStep, calculateMonthlyPayment } from '../../utils/calculations';
 import { schedulePaymentReminders, scheduleReminder, requestNotificationPermissions } from '../../utils/notifications';
 import { confirmDelete } from '../../utils/confirm';
 import type { DebtStatus, Credit, CreditKind, FriendDebt, InsurancePolicy } from '../../types';
@@ -221,6 +221,17 @@ export function CreditsScreen() {
       .sort((a, b) => b.date.getTime() - a.date.getTime());
     const fullRepayment = history.find((r) => r.type === 'full');
 
+    // График строится не от исходной суммы кредита, а от текущего фактического остатка
+    // (c.remaining) — иначе после любых внесённых платежей график продолжал бы показывать
+    // цифры так, будто ни один платёж ещё не был сделан.
+    const upcomingSchedule: { payment: number; remaining: number }[] = [];
+    let scheduleBalance = c.remaining;
+    for (let i = 0; i < 12 && scheduleBalance > 0; i++) {
+      const step = calculateAmortizationStep(scheduleBalance, c.rate, c.monthlyPayment);
+      scheduleBalance = step.newRemaining;
+      upcomingSchedule.push({ payment: c.monthlyPayment, remaining: scheduleBalance });
+    }
+
     return (
       <Card key={c.id}>
         <View style={styles.rowBetween}>
@@ -263,26 +274,21 @@ export function CreditsScreen() {
         />
         {isExpanded && (
           <View style={{ marginTop: spacing.sm }}>
-            {/* Показываем не больше 12 строк графика — при сроке в 60 месяцев
-                рендерить весь список сразу незачем, ниже есть пояснение об усечении. */}
-            {Array.from({ length: Math.min(c.termMonths, 12) }).map((_, i) => {
-              const month = i + 1;
-              const remaining = calculateLoanRemaining(c.amount, c.rate, month, c.termMonths);
-              return (
-                <View key={month} style={styles.scheduleRow}>
-                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>Месяц {month}</Text>
-                  <Text style={{ color: theme.text, fontSize: 12 }}>
-                    {formatCurrency(c.monthlyPayment, currency)}
-                  </Text>
-                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                    Остаток: {formatCurrency(remaining, currency)}
-                  </Text>
-                </View>
-              );
-            })}
-            {c.termMonths > 12 && (
+            {/* Показываем не больше 12 ближайших платежей, отталкиваясь от текущего остатка. */}
+            {upcomingSchedule.map((row, i) => (
+              <View key={i} style={styles.scheduleRow}>
+                <Text style={{ color: theme.textMuted, fontSize: 12 }}>Платёж {i + 1}</Text>
+                <Text style={{ color: theme.text, fontSize: 12 }}>
+                  {formatCurrency(row.payment, currency)}
+                </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                  Остаток: {formatCurrency(row.remaining, currency)}
+                </Text>
+              </View>
+            ))}
+            {upcomingSchedule.length === 12 && scheduleBalance > 0 && (
               <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 4 }}>
-                Показаны первые 12 месяцев из {c.termMonths}
+                Показаны ближайшие 12 платежей
               </Text>
             )}
 

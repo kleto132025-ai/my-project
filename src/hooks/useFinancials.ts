@@ -25,18 +25,12 @@ function useNormalizedTransactions(): Transaction[] {
 
 export function useFreeFunds(): number {
   const transactions = useNormalizedTransactions();
-  const credits = useFinanceStore((s) => s.credits);
-  const goals = useFinanceStore((s) => s.goals);
 
-  return useMemo(() => {
-    // Формула из ТЗ: Доходы − Расходы − Кредиты − Отчисления в цели.
-    // "Кредиты" трактуем как сумму ежемесячных платежей по активным кредитам,
-    // "Отчисления в цели" — как уже отложенную (savedAmount) сумму по всем целям.
-    const balance = calculateBalance(transactions);
-    const creditObligations = credits.reduce((sum, c) => sum + c.monthlyPayment, 0);
-    const goalContributions = goals.reduce((sum, g) => sum + g.savedAmount, 0);
-    return balance - creditObligations - goalContributions;
-  }, [transactions, credits, goals]);
+  // Свободные средства — это просто остаток после расходов (доходы минус расходы),
+  // без вычета кредитных платежей и отчислений в цели: пользователь ожидает увидеть
+  // здесь именно то, что у него реально осталось на руках, а не гипотетический остаток
+  // после ещё не совершённых списаний.
+  return useMemo(() => calculateBalance(transactions), [transactions]);
 }
 
 export function useTodaySummary(): { income: number; expense: number } {

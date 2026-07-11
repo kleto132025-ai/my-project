@@ -49,12 +49,10 @@ export function DashboardScreen() {
         {isNegative ? (
           <View style={styles.warningRow}>
             <Ionicons name="alert-circle-outline" size={14} color="#FCA5A5" />
-            <Text style={styles.warningText}>
-              Обязательства по кредитам и целям превышают текущий баланс
-            </Text>
+            <Text style={styles.warningText}>Расходы превышают доходы</Text>
           </View>
         ) : (
-          <Text style={styles.balanceHint}>Доходы − Расходы − Кредиты − Отчисления в цели</Text>
+          <Text style={styles.balanceHint}>Доходы − Расходы</Text>
         )}
       </Card>
 
