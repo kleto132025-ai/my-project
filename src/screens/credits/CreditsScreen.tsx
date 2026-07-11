@@ -232,13 +232,17 @@ export function CreditsScreen() {
 
     // График строится не от исходной суммы кредита, а от текущего фактического остатка
     // (c.remaining) — иначе после любых внесённых платежей график продолжал бы показывать
-    // цифры так, будто ни один платёж ещё не был сделан.
-    const upcomingSchedule: { payment: number; remaining: number }[] = [];
+    // цифры так, будто ни один платёж ещё не был сделан. Даты платежей отсчитываются от
+    // c.nextPaymentDate (а не от даты выдачи c.startDate) — день списания по кредиту часто
+    // не совпадает с днём выдачи, и график должен показывать именно реальные даты платежей.
+    const upcomingSchedule: { date: Date; payment: number; remaining: number }[] = [];
     let scheduleBalance = c.remaining;
+    let scheduleDate = new Date(c.nextPaymentDate);
     for (let i = 0; i < 12 && scheduleBalance > 0; i++) {
       const step = calculateAmortizationStep(scheduleBalance, c.rate, c.monthlyPayment);
       scheduleBalance = step.newRemaining;
-      upcomingSchedule.push({ payment: c.monthlyPayment, remaining: scheduleBalance });
+      upcomingSchedule.push({ date: new Date(scheduleDate), payment: c.monthlyPayment, remaining: scheduleBalance });
+      scheduleDate.setMonth(scheduleDate.getMonth() + 1);
     }
 
     return (
@@ -286,7 +290,7 @@ export function CreditsScreen() {
             {/* Показываем не больше 12 ближайших платежей, отталкиваясь от текущего остатка. */}
             {upcomingSchedule.map((row, i) => (
               <View key={i} style={styles.scheduleRow}>
-                <Text style={{ color: theme.textMuted, fontSize: 12 }}>Платёж {i + 1}</Text>
+                <Text style={{ color: theme.textMuted, fontSize: 12 }}>{row.date.toLocaleDateString('ru-RU')}</Text>
                 <Text style={{ color: theme.text, fontSize: 12 }}>
                   {formatCurrency(row.payment, currency)}
                 </Text>
