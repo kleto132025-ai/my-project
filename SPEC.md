@@ -179,7 +179,7 @@
 
 Файл: `src/screens/credits/CreditsScreen.tsx`. Модель погашений — `src/store/financeStore.ts` (`repayCredit` — досрочное погашение, `makePayment` — плановый платёж), `src/database/repository.ts` (`credit_repayments`).
 
-> Для существующих установок (у кого уже была БД до этой фичи) добавлены лёгкие миграции — `src/database/client.ts` докатывает недостающие колонки (`kind`, `propertyAddress`, `downPayment`) через `ALTER TABLE`, игнорируя ошибку, если колонка уже есть.
+> Для существующих установок (у кого уже была БД до этой фичи) добавлены лёгкие миграции — `src/database/client.ts` докатывает недостающие колонки (`credits.kind`, `credits.propertyAddress`, `credits.downPayment`, `credit_repayments.principalPortion`) через `ALTER TABLE`, игнорируя ошибку, если колонка уже есть.
 
 ---
 
@@ -265,7 +265,7 @@
 - `ErrorBoundary` оборачивает каждый экран (`src/components/withErrorBoundary.tsx`) — при падении показывает «Что-то пошло не так» + кнопку «Обновить».
 - Списки транзакций — `FlatList` с `useMemo`/`useCallback` (не `ScrollView.map`).
 - Уникальные ID — `uuid v4` (`react-native-uuid`).
-- Тесты: **42 теста** (Jest + React Native Testing Library) — покрывают все утилиты (`src/utils/`) и несколько ключевых компонентов (`AppButton`, `ProgressBar`).
+- Тесты: **56 тестов** (Jest + React Native Testing Library) — покрывают все утилиты (`src/utils/`) и несколько ключевых компонентов (`AppButton`, `ProgressBar`).
 - Комментарии в коде — на русском, только там, где логика неочевидна (не построчно).
 - **CRUD везде одинаковый**: у каждой сущности с собственным экраном (транзакции, цели, вклады, инвестиции, кэшбэк, кредиты, долги, страховки, лимиты бюджета, вишлист, шаблоны) есть удаление (`confirmDelete` + подтверждение) и редактирование (тап/иконка открывает ту же форму добавления, предзаполненную текущими значениями). Хранилище (`financeStore`) поддерживает upsert по `id` для всех сущностей, кроме транзакций — для них отдельно есть `editTransaction`.
 
