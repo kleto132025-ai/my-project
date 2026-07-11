@@ -53,6 +53,7 @@ export function CreditsScreen() {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [currentRemaining, setCurrentRemaining] = useState('');
+  const [monthlyPaymentInput, setMonthlyPaymentInput] = useState('');
   const [rate, setRate] = useState('');
   const [term, setTerm] = useState('24');
   const [issueDate, setIssueDate] = useState(new Date());
@@ -76,6 +77,7 @@ export function CreditsScreen() {
     setName('');
     setAmount('');
     setCurrentRemaining('');
+    setMonthlyPaymentInput('');
     setRate('');
     setTerm('24');
     setIssueDate(new Date());
@@ -93,6 +95,7 @@ export function CreditsScreen() {
     setName(c.name);
     setAmount(String(c.amount));
     setCurrentRemaining(String(c.remaining));
+    setMonthlyPaymentInput(String(c.monthlyPayment));
     setRate(String(c.rate));
     setTerm(String(c.termMonths));
     setIssueDate(c.startDate);
@@ -136,6 +139,14 @@ export function CreditsScreen() {
     // именно от этой суммы, а не от исходной суммы кредита.
     const enteredRemaining = currentRemaining.trim() ? parseLocaleNumber(currentRemaining) : NaN;
     const remaining = !Number.isNaN(enteredRemaining) ? enteredRemaining : existing?.remaining ?? amt;
+    // Аннуитетная формула считает платёж от исходной суммы и полного срока — для кредита, уже
+    // взятого раньше (с указанным вручную "Текущим остатком"), или если банк просто считает
+    // иначе, эта цифра может не совпадать с реальным платёжным поручением. Поэтому платёж можно
+    // задать вручную; если поле пустое — используется расчёт по формуле, как раньше.
+    const enteredMonthlyPayment = monthlyPaymentInput.trim() ? parseLocaleNumber(monthlyPaymentInput) : NaN;
+    const monthlyPayment = !Number.isNaN(enteredMonthlyPayment)
+      ? enteredMonthlyPayment
+      : calculateMonthlyPayment(amt, rt, tm);
     await saveCredit({
       ...(editingId ? { id: editingId } : {}),
       kind: existing?.kind ?? formKind,
@@ -143,7 +154,7 @@ export function CreditsScreen() {
       amount: amt,
       rate: rt,
       termMonths: tm,
-      monthlyPayment: calculateMonthlyPayment(amt, rt, tm),
+      monthlyPayment,
       remaining,
       // Дата следующего платежа теперь задаётся вручную (по умолчанию — через 30 дней),
       // чтобы совпадать с реальным днём списания, а не с произвольной датой создания записи.
@@ -376,6 +387,13 @@ export function CreditsScreen() {
       />
       <FormInput label="Ставка %" keyboardType="decimal-pad" value={rate} onChangeText={setRate} />
       <FormInput label="Срок (мес.)" keyboardType="numeric" value={term} onChangeText={setTerm} />
+      <FormInput
+        label="Ежемесячный платёж"
+        keyboardType="decimal-pad"
+        value={monthlyPaymentInput}
+        onChangeText={setMonthlyPaymentInput}
+        placeholder="Если не заполнить — считается автоматически"
+      />
       <DateField label="Дата выдачи" value={issueDate} onChange={setIssueDate} />
       <DateField label="Дата следующего платежа" value={nextPaymentDateInput} onChange={setNextPaymentDateInput} />
       {formKind === 'mortgage' && (
