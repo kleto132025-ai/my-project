@@ -13,6 +13,9 @@ export function useFreeFunds(): number {
   const goals = useFinanceStore((s) => s.goals);
 
   return useMemo(() => {
+    // Формула из ТЗ: Доходы − Расходы − Кредиты − Отчисления в цели.
+    // "Кредиты" трактуем как сумму ежемесячных платежей по активным кредитам,
+    // "Отчисления в цели" — как уже отложенную (savedAmount) сумму по всем целям.
     const balance = calculateBalance(transactions);
     const creditObligations = credits.reduce((sum, c) => sum + c.monthlyPayment, 0);
     const goalContributions = goals.reduce((sum, g) => sum + g.savedAmount, 0);

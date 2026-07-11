@@ -16,8 +16,11 @@ export function ProgressBar({ percent, color, height = 8 }: ProgressBarProps) {
   const trackColor = theme.isDark ? '#334155' : '#E2E8F0';
 
   return (
-    <View style={[styles.track, { height, backgroundColor: trackColor }]}>
-      <View style={[styles.fill, { width: `${clamped}%`, backgroundColor: barColor, height }]} />
+    <View testID="progress-bar-track" style={[styles.track, { height, backgroundColor: trackColor }]}>
+      <View
+        testID="progress-bar-fill"
+        style={[styles.fill, { width: `${clamped}%`, backgroundColor: barColor, height }]}
+      />
     </View>
   );
 }

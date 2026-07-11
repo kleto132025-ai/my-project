@@ -1,8 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/ScreenContainer';
-import { Card } from '../../components/Card';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { TransactionRow } from '../../components/TransactionRow';
 import { EmptyState } from '../../components/EmptyState';
@@ -12,7 +11,7 @@ import { spacing, radius } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from '../../theme/categoryIcons';
-import type { TransactionType } from '../../types';
+import type { Transaction, TransactionType } from '../../types';
 
 type PeriodFilter = 'week' | 'month' | 'quarter' | 'year' | 'all';
 
@@ -40,6 +39,8 @@ export function TransactionsScreen() {
   const categories = type === 'expense' ? DEFAULT_EXPENSE_CATEGORIES : DEFAULT_INCOME_CATEGORIES;
   const accentColor = type === 'expense' ? theme.expenseColor : theme.incomeColor;
 
+  // Список транзакций может расти до сотен записей, поэтому фильтрация мемоизируется,
+  // а рендер отдан FlatList — он виртуализирует строки и не держит все элементы в памяти одновременно.
   const filtered = useMemo(() => {
     return transactions
       .filter((t) => t.type === type)
@@ -54,74 +55,88 @@ export function TransactionsScreen() {
       });
   }, [transactions, type, period, selectedCategory, debouncedSearch]);
 
+  const renderItem = useCallback(({ item }: { item: Transaction }) => <TransactionRow transaction={item} />, []);
+  const keyExtractor = useCallback((item: Transaction) => item.id, []);
+
+  const filtersHeader = (
+    <View>
+      <SegmentedControl
+        value={type}
+        onChange={(v) => {
+          setType(v);
+          setSelectedCategory(null);
+        }}
+        options={[
+          { label: 'Расходы', value: 'expense' },
+          { label: 'Доходы', value: 'income' },
+        ]}
+      />
+
+      <TextInput
+        placeholder="Поиск по категории или комментарию"
+        placeholderTextColor={theme.textMuted}
+        value={search}
+        onChangeText={setSearch}
+        style={[
+          styles.search,
+          { borderColor: theme.border, color: theme.text, backgroundColor: theme.card },
+        ]}
+      />
+
+      <SegmentedControl
+        value={period}
+        onChange={setPeriod}
+        options={[
+          { label: 'Неделя', value: 'week' },
+          { label: 'Месяц', value: 'month' },
+          { label: 'Квартал', value: 'quarter' },
+          { label: 'Год', value: 'year' },
+          { label: 'Все', value: 'all' },
+        ]}
+      />
+
+      <View style={styles.chipsRow}>
+        {categories.map((c) => {
+          const active = selectedCategory === c;
+          return (
+            <Pressable
+              key={c}
+              onPress={() => setSelectedCategory(active ? null : c)}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: active ? accentColor : theme.isDark ? '#1E293B' : '#EEF2F7',
+                  borderColor: active ? accentColor : theme.border,
+                },
+              ]}
+            >
+              <Text style={{ color: active ? '#FFFFFF' : theme.text, fontSize: 12, fontWeight: '600' }}>
+                {c}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+
   return (
     <View style={{ flex: 1 }}>
-      <ScreenContainer>
-        <SegmentedControl
-          value={type}
-          onChange={(v) => {
-            setType(v);
-            setSelectedCategory(null);
-          }}
-          options={[
-            { label: 'Расходы', value: 'expense' },
-            { label: 'Доходы', value: 'income' },
-          ]}
-        />
-
-        <TextInput
-          placeholder="Поиск по категории или комментарию"
-          placeholderTextColor={theme.textMuted}
-          value={search}
-          onChangeText={setSearch}
-          style={[
-            styles.search,
-            { borderColor: theme.border, color: theme.text, backgroundColor: theme.card },
-          ]}
-        />
-
-        <SegmentedControl
-          value={period}
-          onChange={setPeriod}
-          options={[
-            { label: 'Неделя', value: 'week' },
-            { label: 'Месяц', value: 'month' },
-            { label: 'Квартал', value: 'quarter' },
-            { label: 'Год', value: 'year' },
-            { label: 'Все', value: 'all' },
-          ]}
-        />
-
-        <View style={styles.chipsRow}>
-          {categories.map((c) => {
-            const active = selectedCategory === c;
-            return (
-              <Pressable
-                key={c}
-                onPress={() => setSelectedCategory(active ? null : c)}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: active ? accentColor : theme.isDark ? '#1E293B' : '#EEF2F7',
-                    borderColor: active ? accentColor : theme.border,
-                  },
-                ]}
-              >
-                <Text style={{ color: active ? '#FFFFFF' : theme.text, fontSize: 12, fontWeight: '600' }}>
-                  {c}
-                </Text>
-              </Pressable>
-            );
-          })}
+      <ScreenContainer scroll={false}>
+        {filtersHeader}
+        <View style={[styles.listCard, { backgroundColor: theme.card }]}>
+          <FlatList
+            data={filtered}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            ListEmptyComponent={
+              <EmptyState title="Транзакций не найдено" subtitle="Измените фильтры или добавьте новую запись" />
+            }
+            ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.border }]} />}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
         </View>
-
-        <Card>
-          {filtered.length === 0 ? (
-            <EmptyState title="Транзакций не найдено" subtitle="Измените фильтры или добавьте новую запись" />
-          ) : (
-            filtered.map((t) => <TransactionRow key={t.id} transaction={t} />)
-          )}
-        </Card>
       </ScreenContainer>
       <FloatingAddButton color={accentColor} onPress={() => navigation.navigate('AddTransaction', { type })} />
     </View>
@@ -139,4 +154,14 @@ const styles = StyleSheet.create({
   },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
   chip: { paddingHorizontal: spacing.sm + 2, paddingVertical: 6, borderRadius: radius.full, borderWidth: 1 },
+  listCard: {
+    flex: 1,
+    borderRadius: radius.lg,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  listContent: { padding: spacing.md, flexGrow: 1 },
+  separator: { height: StyleSheet.hairlineWidth, marginLeft: 52 },
 });

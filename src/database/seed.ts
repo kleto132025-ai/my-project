@@ -14,6 +14,8 @@ import {
 } from './repository';
 import { calculateMonthlyPayment } from '../utils/calculations';
 
+// Флаг сидирования хранится в app_meta, чтобы демо-данные добавлялись один раз —
+// при повторных запусках приложения seedDemoDataIfNeeded() сразу выходит.
 const SEED_FLAG_KEY = 'demo_data_seeded';
 
 function daysAgo(days: number): Date {

@@ -15,6 +15,8 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 }
 
 export async function scheduleReminder(title: string, body: string, triggerDate: Date): Promise<void> {
+  // Если дата напоминания уже в прошлом (например, событие добавили задним числом),
+  // молча пропускаем — планировать уведомление на прошлое не имеет смысла.
   if (triggerDate.getTime() <= Date.now()) return;
   await Notifications.scheduleNotificationAsync({
     content: { title, body },

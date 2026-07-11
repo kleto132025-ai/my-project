@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
@@ -18,6 +18,10 @@ import {
   useTopCategories,
   useForecast,
 } from '../../hooks/useFinancials';
+import type { Transaction } from '../../types';
+
+const renderTransactionRow = ({ item }: { item: Transaction }) => <TransactionRow transaction={item} />;
+const keyExtractor = (item: Transaction) => item.id;
 
 export function DashboardScreen() {
   const theme = useTheme();
@@ -64,7 +68,15 @@ export function DashboardScreen() {
         {recentTransactions.length === 0 ? (
           <EmptyState title="Пока нет транзакций" subtitle="Добавьте первый доход или расход" />
         ) : (
-          recentTransactions.map((t) => <TransactionRow key={t.id} transaction={t} />)
+          // Список короткий (максимум 5 записей) и вложен в общий ScrollView экрана,
+          // поэтому собственный скролл FlatList отключён — виртуализация здесь не нужна,
+          // а сам FlatList используется ради единообразного рендера строк списком.
+          <FlatList
+            data={recentTransactions}
+            keyExtractor={keyExtractor}
+            renderItem={renderTransactionRow}
+            scrollEnabled={false}
+          />
         )}
       </Card>
 

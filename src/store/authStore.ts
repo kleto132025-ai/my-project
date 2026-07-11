@@ -8,6 +8,10 @@ const SECRET_KEY = 'finance_app_auth_secret';
 const MAX_ATTEMPTS = 3;
 const LOCKOUT_MS = 5 * 60 * 1000;
 
+// Сам PIN/пароль хранится ТОЛЬКО в expo-secure-store (шифрованное хранилище ОС).
+// В persist-хранилище (AsyncStorage, см. partialize ниже) остаются лишь метаданные —
+// факт настройки входа, метод и счётчик попыток, — секрет туда никогда не попадает.
+
 interface AuthState {
   hasSetupAuth: boolean;
   authMethod: AuthMethod;
@@ -51,6 +55,9 @@ export const useAuthStore = create<AuthState>()(
           set({ failedAttempts: 0, lockedUntil: null, isUnlockedThisSession: true });
           return true;
         }
+        // После 3 неверных попыток включаем блокировку на 5 минут; счётчик и время
+        // окончания блокировки переживают перезапуск приложения (persist), иначе
+        // блокировку можно было бы обойти простым перезапуском.
         const attempts = get().failedAttempts + 1;
         if (attempts >= MAX_ATTEMPTS) {
           set({ failedAttempts: attempts, lockedUntil: Date.now() + LOCKOUT_MS });

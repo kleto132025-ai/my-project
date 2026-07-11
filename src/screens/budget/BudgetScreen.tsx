@@ -42,6 +42,8 @@ export function BudgetScreen() {
       const threshold = percent >= 100 ? '100' : percent >= 80 ? '80' : null;
       if (!threshold) return;
 
+      // relatedId кодирует лимит + порог (80/100), поэтому при каждом ререндере экрана
+      // не плодим дубликаты одного и того же предупреждения — только новое пересечение порога.
       const alreadyNotified = notifications.some(
         (n) => n.type === 'limit' && n.relatedId === `${limit.id}-${threshold}`
       );

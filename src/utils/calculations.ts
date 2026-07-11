@@ -11,7 +11,8 @@ export function calculateBalance(transactions: Transaction[]): number {
 export function calculateForecast(transactions: Transaction[], months: number): number {
   if (months <= 0) return calculateBalance(transactions);
 
-  const now = new Date();
+  // Прогноз строится не по последнему месяцу, а по среднему чистому потоку (доходы минус расходы)
+  // за все месяцы, где были операции — так один аномально большой платёж не искажает прогноз.
   const monthsSpan = new Map<string, number>();
   for (const t of transactions) {
     const key = `${t.date.getFullYear()}-${t.date.getMonth()}`;
@@ -31,6 +32,9 @@ export function calculateForecast(transactions: Transaction[], months: number): 
   return currentBalance + avgMonthlyNet * months;
 }
 
+// termMonths — необязательный параметр сверх сигнатуры из ТЗ (amount, rate, paidMonths).
+// Без общего срока кредита формула аннуитета математически вырождается в исходную сумму
+// (числитель и знаменатель сокращаются), поэтому термин нужен по умолчанию.
 export function calculateLoanRemaining(
   amount: number,
   rate: number,
@@ -45,6 +49,8 @@ export function calculateLoanRemaining(
     return Math.max(Math.round(amount * (1 - paidMonths / termMonths) * 100) / 100, 0);
   }
 
+  // Классическая формула остатка аннуитетного кредита:
+  // остаток = P * [(1+r)^n - (1+r)^p] / [(1+r)^n - 1], где n — общий срок, p — оплаченные месяцы.
   const growthFull = Math.pow(1 + monthlyRate, termMonths);
   const growthPaid = Math.pow(1 + monthlyRate, paidMonths);
   const remaining = (amount * (growthFull - growthPaid)) / (growthFull - 1);
@@ -61,6 +67,7 @@ export function calculateMonthlyPayment(amount: number, rate: number, termMonths
   if (termMonths <= 0) return amount;
   const monthlyRate = rate / 100 / 12;
   if (monthlyRate === 0) return Math.round((amount / termMonths) * 100) / 100;
+  // Стандартная формула аннуитетного платежа.
   const payment =
     (amount * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) /
     (Math.pow(1 + monthlyRate, termMonths) - 1);

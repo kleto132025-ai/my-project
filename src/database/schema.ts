@@ -1,3 +1,6 @@
+// Даты хранятся как TEXT в формате ISO-8601 (совместимо с new Date(...).toISOString()/new Date(str)),
+// булевы значения — как INTEGER 0/1 (в SQLite нет отдельного типа BOOLEAN).
+// Конвертация в типизированные объекты происходит в database/repository.ts.
 export const SCHEMA_STATEMENTS = `
 PRAGMA journal_mode = WAL;
 

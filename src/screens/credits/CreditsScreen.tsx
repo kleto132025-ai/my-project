@@ -177,6 +177,8 @@ export function CreditsScreen() {
                   />
                   {isExpanded && (
                     <View style={{ marginTop: spacing.sm }}>
+                      {/* Показываем не больше 12 строк графика — при сроке в 60 месяцев
+                          рендерить весь список сразу незачем, ниже есть пояснение об усечении. */}
                       {Array.from({ length: Math.min(c.termMonths, 12) }).map((_, i) => {
                         const month = i + 1;
                         const remaining = calculateLoanRemaining(c.amount, c.rate, month, c.termMonths);
