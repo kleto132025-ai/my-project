@@ -149,22 +149,41 @@ export async function deleteCredit(id: string): Promise<void> {
 
 // ---------- Credit repayments ----------
 
-type CreditRepaymentRow = Omit<CreditRepayment, 'date'> & { date: string };
+type CreditRepaymentRow = Omit<CreditRepayment, 'date' | 'principalPortion'> & {
+  date: string;
+  principalPortion: number | null;
+};
 
 export async function listCreditRepayments(): Promise<CreditRepayment[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<CreditRepaymentRow>(
     'SELECT * FROM credit_repayments ORDER BY date DESC;'
   );
-  return rows.map((r) => ({ ...r, date: new Date(r.date) }));
+  // principalPortion может быть NULL у записей, сделанных до появления этой колонки —
+  // для них вся сумма считалась досрочным погашением тела кредита, так что amount и есть
+  // фактический разбор на основной долг.
+  return rows.map((r) => ({ ...r, date: new Date(r.date), principalPortion: r.principalPortion ?? r.amount }));
 }
 
 export async function insertCreditRepayment(r: CreditRepayment): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO credit_repayments (id, creditId, date, amount, type) VALUES (?, ?, ?, ?, ?);`,
-    [r.id, r.creditId, r.date.toISOString(), r.amount, r.type]
+    `INSERT INTO credit_repayments (id, creditId, date, amount, type, principalPortion) VALUES (?, ?, ?, ?, ?, ?);`,
+    [r.id, r.creditId, r.date.toISOString(), r.amount, r.type, r.principalPortion]
   );
+}
+
+export async function updateCreditRepayment(r: CreditRepayment): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE credit_repayments SET date = ?, amount = ?, type = ?, principalPortion = ? WHERE id = ?;`,
+    [r.date.toISOString(), r.amount, r.type, r.principalPortion, r.id]
+  );
+}
+
+export async function deleteCreditRepayment(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM credit_repayments WHERE id = ?;', [id]);
 }
 
 // ---------- Budget limits ----------

@@ -13,6 +13,7 @@ const MIGRATION_STATEMENTS = [
   "ALTER TABLE credits ADD COLUMN kind TEXT NOT NULL DEFAULT 'credit';",
   'ALTER TABLE credits ADD COLUMN propertyAddress TEXT;',
   'ALTER TABLE credits ADD COLUMN downPayment REAL;',
+  'ALTER TABLE credit_repayments ADD COLUMN principalPortion REAL;',
 ];
 
 async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

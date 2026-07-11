@@ -18,7 +18,7 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateAmortizationStep, calculateMonthlyPayment } from '../../utils/calculations';
 import { schedulePaymentReminders, scheduleReminder, requestNotificationPermissions } from '../../utils/notifications';
 import { confirmDelete } from '../../utils/confirm';
-import type { DebtStatus, Credit, CreditKind, FriendDebt, InsurancePolicy } from '../../types';
+import type { DebtStatus, Credit, CreditKind, CreditRepayment, FriendDebt, InsurancePolicy } from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'credits' | 'mortgage' | 'calendar' | 'debts' | 'insurance';
@@ -44,6 +44,8 @@ export function CreditsScreen() {
   const removeInsurancePolicy = useFinanceStore((s) => s.removeInsurancePolicy);
   const repayCredit = useFinanceStore((s) => s.repayCredit);
   const makePayment = useFinanceStore((s) => s.makePayment);
+  const editCreditRepayment = useFinanceStore((s) => s.editCreditRepayment);
+  const removeCreditRepayment = useFinanceStore((s) => s.removeCreditRepayment);
 
   const credits = useMemo(() => allCredits.filter((c) => c.kind === 'credit'), [allCredits]);
   const mortgages = useMemo(() => allCredits.filter((c) => c.kind === 'mortgage'), [allCredits]);
@@ -72,6 +74,9 @@ export function CreditsScreen() {
   const [nextPaymentDateInput, setNextPaymentDateInput] = useState(
     new Date(Date.now() + 30 * 24 * 3600 * 1000)
   );
+  const [editingRepaymentId, setEditingRepaymentId] = useState<string | null>(null);
+  const [repaymentEditAmount, setRepaymentEditAmount] = useState('');
+  const [repaymentEditDate, setRepaymentEditDate] = useState(new Date());
 
   const resetForm = () => {
     setName('');
@@ -180,6 +185,25 @@ export function CreditsScreen() {
     await makePayment(creditId, payAmount, paymentDate);
     setPaymentAmount('');
     setPaymentDate(new Date());
+  };
+
+  const startEditRepayment = (r: CreditRepayment) => {
+    setEditingRepaymentId(r.id);
+    setRepaymentEditAmount(String(r.amount));
+    setRepaymentEditDate(r.date);
+  };
+
+  const cancelEditRepayment = () => {
+    setEditingRepaymentId(null);
+    setRepaymentEditAmount('');
+  };
+
+  const handleSaveRepaymentEdit = async () => {
+    if (!editingRepaymentId) return;
+    const editAmount = parseLocaleNumber(repaymentEditAmount);
+    if (Number.isNaN(editAmount) || editAmount <= 0) return;
+    await editCreditRepayment(editingRepaymentId, editAmount, repaymentEditDate);
+    cancelEditRepayment();
   };
 
   const handleAddDebt = async () => {
@@ -321,17 +345,40 @@ export function CreditsScreen() {
                 <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
                   История погашений
                 </Text>
-                {history.map((r) => (
-                  <View key={r.id} style={styles.scheduleRow}>
-                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                      {r.date.toLocaleDateString('ru-RU')}
-                    </Text>
-                    <Text style={{ color: theme.text, fontSize: 12 }}>{formatCurrency(r.amount, currency)}</Text>
-                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                      {r.type === 'full' ? 'Полное' : r.type === 'regular' ? 'Регулярный' : 'Частичное'}
-                    </Text>
-                  </View>
-                ))}
+                {history.map((r) =>
+                  editingRepaymentId === r.id ? (
+                    <View key={r.id} style={{ marginBottom: spacing.sm }}>
+                      <FormInput
+                        label="Сумма"
+                        keyboardType="decimal-pad"
+                        value={repaymentEditAmount}
+                        onChangeText={setRepaymentEditAmount}
+                      />
+                      <DateField label="Дата" value={repaymentEditDate} onChange={setRepaymentEditDate} />
+                      <AppButton title="Сохранить" onPress={handleSaveRepaymentEdit} />
+                      <View style={{ height: spacing.xs }} />
+                      <AppButton title="Отмена" variant="outline" onPress={cancelEditRepayment} />
+                    </View>
+                  ) : (
+                    <View key={r.id} style={styles.scheduleRow}>
+                      <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                        {r.date.toLocaleDateString('ru-RU')}
+                      </Text>
+                      <Text style={{ color: theme.text, fontSize: 12 }}>{formatCurrency(r.amount, currency)}</Text>
+                      <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                        {r.type === 'full' ? 'Полное' : r.type === 'regular' ? 'Регулярный' : 'Частичное'}
+                      </Text>
+                      <CardActions
+                        onEdit={() => startEditRepayment(r)}
+                        onDelete={() =>
+                          confirmDelete(`платёж от ${r.date.toLocaleDateString('ru-RU')}`, () =>
+                            removeCreditRepayment(r.id)
+                          )
+                        }
+                      />
+                    </View>
+                  )
+                )}
               </View>
             )}
 

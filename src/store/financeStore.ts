@@ -61,6 +61,13 @@ interface FinanceState {
    * Также сдвигает дату следующего платежа на месяц вперёд, чтобы календарь оставался актуальным.
    */
   makePayment: (creditId: string, amount: number, date: Date) => Promise<void>;
+  /**
+   * Редактирует уже записанное погашение (сумму/дату) и пересчитывает остаток по кредиту:
+   * сначала "откатывает" старое влияние этой записи на remaining, затем применяет новое.
+   */
+  editCreditRepayment: (repaymentId: string, amount: number, date: Date) => Promise<void>;
+  /** Удаляет запись погашения и возвращает её долю основного долга обратно в remaining. */
+  removeCreditRepayment: (repaymentId: string) => Promise<void>;
 
   saveBudgetLimit: (b: BudgetLimit | Omit<BudgetLimit, 'id'>) => Promise<void>;
   removeBudgetLimit: (id: string) => Promise<void>;
@@ -193,6 +200,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const credit = get().credits.find((c) => c.id === creditId);
     if (!credit || amount <= 0) return;
 
+    const principalPortion = Math.min(amount, credit.remaining);
     const remaining = Math.max(credit.remaining - amount, 0);
     const isFull = remaining <= 0;
     const updatedCredit: Credit = { ...credit, remaining };
@@ -204,6 +212,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       date,
       amount,
       type: isFull ? 'full' : 'partial',
+      principalPortion,
     };
     await repo.insertCreditRepayment(repayment);
 
@@ -218,7 +227,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const credit = get().credits.find((c) => c.id === creditId);
     if (!credit || amount <= 0) return;
 
-    const { newRemaining } = calculateAmortizationStep(credit.remaining, credit.rate, amount);
+    const { newRemaining, principalPortion } = calculateAmortizationStep(credit.remaining, credit.rate, amount);
     const isFull = newRemaining <= 0;
 
     const nextPaymentDate = new Date(credit.nextPaymentDate);
@@ -233,6 +242,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       date,
       amount,
       type: isFull ? 'full' : 'regular',
+      principalPortion,
     };
     await repo.insertCreditRepayment(repayment);
 
@@ -241,6 +251,58 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       creditRepayments: [repayment, ...state.creditRepayments],
     }));
     await get().checkAndUnlockAchievements();
+  },
+
+  editCreditRepayment: async (repaymentId, amount, date) => {
+    const repayment = get().creditRepayments.find((r) => r.id === repaymentId);
+    if (!repayment || amount <= 0) return;
+    const credit = get().credits.find((c) => c.id === repayment.creditId);
+    if (!credit) return;
+
+    // Сначала "откатываем" старое влияние этой записи на остаток, затем применяем новое —
+    // так остаток по кредиту остаётся ровно суммой исходного остатка минус доли основного
+    // долга по всем записям истории, независимо от того, какая именно запись редактируется.
+    const remainingBeforeThisRepayment = credit.remaining + repayment.principalPortion;
+
+    let principalPortion: number;
+    let newRemaining: number;
+    if (repayment.type === 'regular') {
+      const step = calculateAmortizationStep(remainingBeforeThisRepayment, credit.rate, amount);
+      principalPortion = step.principalPortion;
+      newRemaining = step.newRemaining;
+    } else {
+      principalPortion = Math.min(amount, remainingBeforeThisRepayment);
+      newRemaining = Math.max(remainingBeforeThisRepayment - amount, 0);
+    }
+    const isFull = newRemaining <= 0;
+    const type = isFull ? 'full' : repayment.type === 'regular' ? 'regular' : 'partial';
+
+    const updatedCredit: Credit = { ...credit, remaining: newRemaining };
+    const updatedRepayment: CreditRepayment = { ...repayment, amount, date, type, principalPortion };
+    await repo.upsertCredit(updatedCredit);
+    await repo.updateCreditRepayment(updatedRepayment);
+
+    set((state) => ({
+      credits: state.credits.map((c) => (c.id === credit.id ? updatedCredit : c)),
+      creditRepayments: state.creditRepayments.map((r) => (r.id === repaymentId ? updatedRepayment : r)),
+    }));
+  },
+
+  removeCreditRepayment: async (repaymentId) => {
+    const repayment = get().creditRepayments.find((r) => r.id === repaymentId);
+    if (!repayment) return;
+    const credit = get().credits.find((c) => c.id === repayment.creditId);
+    if (!credit) return;
+
+    const remaining = Math.min(credit.remaining + repayment.principalPortion, credit.amount);
+    const updatedCredit: Credit = { ...credit, remaining };
+    await repo.upsertCredit(updatedCredit);
+    await repo.deleteCreditRepayment(repaymentId);
+
+    set((state) => ({
+      credits: state.credits.map((c) => (c.id === credit.id ? updatedCredit : c)),
+      creditRepayments: state.creditRepayments.filter((r) => r.id !== repaymentId),
+    }));
   },
 
   saveBudgetLimit: async (b) => {

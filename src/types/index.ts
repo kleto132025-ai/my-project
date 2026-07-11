@@ -55,6 +55,8 @@ export interface CreditRepayment {
   date: Date;
   amount: number;
   type: CreditRepaymentType;
+  /** Сколько из этой суммы реально ушло в счёт основного долга (остальное — проценты). */
+  principalPortion: number;
 }
 
 export type BudgetPeriod = 'month' | 'quarter' | 'year';

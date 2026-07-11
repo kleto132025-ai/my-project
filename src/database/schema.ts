@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS credit_repayments (
   creditId TEXT NOT NULL,
   date TEXT NOT NULL,
   amount REAL NOT NULL,
-  type TEXT NOT NULL
+  type TEXT NOT NULL,
+  principalPortion REAL
 );
 
 CREATE TABLE IF NOT EXISTS budget_limits (
