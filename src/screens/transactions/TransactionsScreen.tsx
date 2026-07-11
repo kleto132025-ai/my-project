@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from 'react-na
 import { useNavigation } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { SegmentedControl } from '../../components/SegmentedControl';
-import { TransactionRow } from '../../components/TransactionRow';
+import { SwipeableTransactionRow } from '../../components/SwipeableTransactionRow';
 import { EmptyState } from '../../components/EmptyState';
 import { FloatingAddButton } from '../../components/FloatingAddButton';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { confirmDelete } from '../../utils/confirm';
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from '../../theme/categoryIcons';
 import type { Transaction, TransactionType } from '../../types';
 
@@ -29,6 +30,7 @@ export function TransactionsScreen() {
   const theme = useTheme();
   const navigation = useNavigation<any>();
   const transactions = useFinanceStore((s) => s.transactions);
+  const removeTransaction = useFinanceStore((s) => s.removeTransaction);
 
   const [type, setType] = useState<TransactionType>('expense');
   const [period, setPeriod] = useState<PeriodFilter>('month');
@@ -55,7 +57,16 @@ export function TransactionsScreen() {
       });
   }, [transactions, type, period, selectedCategory, debouncedSearch]);
 
-  const renderItem = useCallback(({ item }: { item: Transaction }) => <TransactionRow transaction={item} />, []);
+  const renderItem = useCallback(
+    ({ item }: { item: Transaction }) => (
+      <SwipeableTransactionRow
+        transaction={item}
+        onPress={() => navigation.navigate('AddTransaction', { transaction: item })}
+        onDelete={() => confirmDelete(item.category, () => removeTransaction(item.id))}
+      />
+    ),
+    [navigation, removeTransaction]
+  );
   const keyExtractor = useCallback((item: Transaction) => item.id, []);
 
   const filtersHeader = (

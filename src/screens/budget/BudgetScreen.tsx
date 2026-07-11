@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
+import { CardActions } from '../../components/CardActions';
 import { ProgressBar } from '../../components/ProgressBar';
 import { FormInput } from '../../components/FormInput';
 import { CategoryPicker } from '../../components/CategoryPicker';
@@ -13,9 +14,10 @@ import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency } from '../../utils/format';
 import { vibrateWarning } from '../../utils/haptics';
+import { confirmDelete } from '../../utils/confirm';
 import { useBudgetLimitsWithSpent } from '../../hooks/useFinancials';
 import { DEFAULT_EXPENSE_CATEGORIES } from '../../theme/categoryIcons';
-import type { BudgetPeriod } from '../../types';
+import type { BudgetLimit, BudgetPeriod } from '../../types';
 
 function daysRemainingInMonth(): number {
   const now = new Date();
@@ -29,9 +31,11 @@ export function BudgetScreen() {
   const vibrationEnabled = useSettingsStore((s) => s.vibrationEnabled);
   const notifications = useFinanceStore((s) => s.notifications);
   const saveBudgetLimit = useFinanceStore((s) => s.saveBudgetLimit);
+  const removeBudgetLimit = useFinanceStore((s) => s.removeBudgetLimit);
   const addNotification = useFinanceStore((s) => s.addNotification);
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [category, setCategory] = useState('');
   const [limitAmount, setLimitAmount] = useState('');
   const [period] = useState<BudgetPeriod>('month');
@@ -68,14 +72,33 @@ export function BudgetScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgetLimits]);
 
-  const handleAddLimit = async () => {
-    if (!category.trim() || !limitAmount) return;
-    await saveBudgetLimit({ category: category.trim(), limit: parseFloat(limitAmount), spent: 0, period });
+  const resetForm = () => {
     setCategory('');
     setLimitAmount('');
     setShowForm(false);
+    setEditingId(null);
   };
 
+  const startEditLimit = (limit: BudgetLimit) => {
+    setCategory(limit.category);
+    setLimitAmount(String(limit.limit));
+    setEditingId(limit.id);
+    setShowForm(true);
+  };
+
+  const handleAddLimit = async () => {
+    if (!category.trim() || !limitAmount) return;
+    await saveBudgetLimit({
+      ...(editingId ? { id: editingId } : {}),
+      category: category.trim(),
+      limit: parseFloat(limitAmount),
+      spent: 0,
+      period,
+    } as BudgetLimit);
+    resetForm();
+  };
+
+  const isEditing = editingId !== null;
   const remainingDays = daysRemainingInMonth();
 
   return (
@@ -92,7 +115,10 @@ export function BudgetScreen() {
             <Card key={limit.id}>
               <View style={styles.rowBetween}>
                 <Text style={[styles.title, { color: theme.text }]}>{limit.category}</Text>
-                <Text style={{ color: theme.textMuted, fontSize: 12 }}>{Math.round(percent)}%</Text>
+                <View style={styles.headerRight}>
+                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>{Math.round(percent)}%</Text>
+                  <CardActions onEdit={() => startEditLimit(limit)} onDelete={() => confirmDelete(limit.category, () => removeBudgetLimit(limit.id))} />
+                </View>
               </View>
               <ProgressBar percent={percent} color={theme.accent} />
               <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
@@ -115,7 +141,9 @@ export function BudgetScreen() {
         <Card>
           <CategoryPicker categories={DEFAULT_EXPENSE_CATEGORIES} selected={category} onSelect={setCategory} />
           <FormInput label="Лимит" keyboardType="numeric" value={limitAmount} onChangeText={setLimitAmount} />
-          <AppButton title="Сохранить лимит" onPress={handleAddLimit} />
+          <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить лимит'} onPress={handleAddLimit} />
+          <View style={{ height: spacing.sm }} />
+          <AppButton title="Отмена" variant="outline" onPress={resetForm} />
         </Card>
       ) : (
         <AppButton title="+ Добавить лимит" variant="outline" onPress={() => setShowForm(true)} />
@@ -127,4 +155,5 @@ export function BudgetScreen() {
 const styles = StyleSheet.create({
   title: { fontSize: 15, fontWeight: '700' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

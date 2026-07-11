@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Switch } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
+import { CardActions } from '../../components/CardActions';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { ProgressBar } from '../../components/ProgressBar';
 import { FormInput } from '../../components/FormInput';
@@ -14,7 +15,8 @@ import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
-import type { AssetType } from '../../types';
+import { confirmDelete } from '../../utils/confirm';
+import type { AssetType, Goal, Deposit, Investment, CashbackCard } from '../../types';
 
 type Segment = 'deposits' | 'investments' | 'goals' | 'cashback';
 
@@ -26,6 +28,7 @@ export function SavingsScreen() {
   const currency = useSettingsStore((s) => s.currency);
   const [segment, setSegment] = useState<Segment>('goals');
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const deposits = useFinanceStore((s) => s.deposits);
   const investments = useFinanceStore((s) => s.investments);
@@ -35,6 +38,10 @@ export function SavingsScreen() {
   const saveInvestment = useFinanceStore((s) => s.saveInvestment);
   const saveGoal = useFinanceStore((s) => s.saveGoal);
   const saveCashbackCard = useFinanceStore((s) => s.saveCashbackCard);
+  const removeDeposit = useFinanceStore((s) => s.removeDeposit);
+  const removeInvestment = useFinanceStore((s) => s.removeInvestment);
+  const removeGoal = useFinanceStore((s) => s.removeGoal);
+  const removeCashbackCard = useFinanceStore((s) => s.removeCashbackCard);
 
   // form state (generic fields reused across segments)
   const [name, setName] = useState('');
@@ -60,52 +67,102 @@ export function SavingsScreen() {
     setIsShared(false);
     setPartnerName('');
     setShowForm(false);
+    setEditingId(null);
+  };
+
+  const startEditGoal = (g: Goal) => {
+    setName(g.name);
+    setAmount(String(g.targetAmount));
+    setDeadline(g.deadline);
+    setIsShared(!!g.isShared);
+    setPartnerName(g.partnerName ?? '');
+    setEditingId(g.id);
+    setShowForm(true);
+  };
+
+  const startEditDeposit = (d: Deposit) => {
+    setName(d.name);
+    setAmount(String(d.amount));
+    setRate(String(d.rate));
+    setOpenDate(d.openDate);
+    setCloseDate(d.closeDate);
+    setEditingId(d.id);
+    setShowForm(true);
+  };
+
+  const startEditInvestment = (i: Investment) => {
+    setName(i.name);
+    setAssetType(i.assetType);
+    setQuantity(String(i.quantity));
+    setPurchasePrice(String(i.purchasePrice));
+    setCurrentPrice(String(i.currentPrice));
+    setEditingId(i.id);
+    setShowForm(true);
+  };
+
+  const startEditCashback = (c: CashbackCard) => {
+    setName(c.name);
+    setRate(String(c.cashbackPercent));
+    setEditingId(c.id);
+    setShowForm(true);
   };
 
   const handleAddDeposit = async () => {
     if (!name.trim() || !amount) return;
     await saveDeposit({
+      ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
       amount: parseFloat(amount),
       rate: parseFloat(rate || '0'),
       openDate,
       closeDate,
-    });
+    } as Deposit);
     resetForm();
   };
 
   const handleAddInvestment = async () => {
     if (!name.trim() || !quantity) return;
     await saveInvestment({
+      ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
       assetType,
       quantity: parseFloat(quantity),
       purchasePrice: parseFloat(purchasePrice || '0'),
       currentPrice: parseFloat(currentPrice || purchasePrice || '0'),
-    });
+    } as Investment);
     resetForm();
   };
 
   const handleAddGoal = async () => {
     if (!name.trim() || !amount) return;
+    const existing = editingId ? goals.find((g) => g.id === editingId) : undefined;
     await saveGoal({
+      ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
       targetAmount: parseFloat(amount),
-      savedAmount: 0,
+      savedAmount: existing?.savedAmount ?? 0,
       deadline,
-      priority: 'medium',
+      priority: existing?.priority ?? 'medium',
       isShared,
       partnerName: isShared ? partnerName.trim() : undefined,
-      partnerSavedAmount: isShared ? 0 : undefined,
-    });
+      partnerSavedAmount: isShared ? existing?.partnerSavedAmount ?? 0 : undefined,
+    } as Goal);
     resetForm();
   };
 
   const handleAddCashback = async () => {
     if (!name.trim() || !rate) return;
-    await saveCashbackCard({ name: name.trim(), cashbackPercent: parseFloat(rate), accumulated: 0 });
+    const existing = editingId ? cashbackCards.find((c) => c.id === editingId) : undefined;
+    await saveCashbackCard({
+      ...(editingId ? { id: editingId } : {}),
+      name: name.trim(),
+      cashbackPercent: parseFloat(rate),
+      accumulated: existing?.accumulated ?? 0,
+    } as CashbackCard);
     resetForm();
   };
+
+  const isEditing = editingId !== null;
 
   return (
     <ScreenContainer>
@@ -132,9 +189,12 @@ export function SavingsScreen() {
               <Card key={g.id}>
                 <View style={styles.rowBetween}>
                   <Text style={[styles.itemTitle, { color: theme.text }]}>{g.name}</Text>
-                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                    до {g.deadline.toLocaleDateString('ru-RU')}
-                  </Text>
+                  <View style={styles.headerRight}>
+                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                      до {g.deadline.toLocaleDateString('ru-RU')}
+                    </Text>
+                    <CardActions onEdit={() => startEditGoal(g)} onDelete={() => confirmDelete(g.name, () => removeGoal(g.id))} />
+                  </View>
                 </View>
                 <ProgressBar percent={calculateGoalProgress(g.savedAmount, g.targetAmount)} />
                 <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
@@ -166,7 +226,9 @@ export function SavingsScreen() {
               {isShared && (
                 <FormInput label="Имя партнёра" value={partnerName} onChangeText={setPartnerName} />
               )}
-              <AppButton title="Сохранить цель" onPress={handleAddGoal} />
+              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить цель'} onPress={handleAddGoal} />
+              <View style={{ height: spacing.sm }} />
+              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
             </Card>
           ) : (
             <AppButton title="+ Добавить цель" variant="outline" onPress={() => setShowForm(true)} />
@@ -181,7 +243,10 @@ export function SavingsScreen() {
           ) : (
             deposits.map((d) => (
               <Card key={d.id}>
-                <Text style={[styles.itemTitle, { color: theme.text }]}>{d.name}</Text>
+                <View style={styles.rowBetween}>
+                  <Text style={[styles.itemTitle, { color: theme.text }]}>{d.name}</Text>
+                  <CardActions onEdit={() => startEditDeposit(d)} onDelete={() => confirmDelete(d.name, () => removeDeposit(d.id))} />
+                </View>
                 <Text style={{ color: theme.textMuted, marginTop: 4 }}>
                   {formatCurrency(d.amount, currency)} · {d.rate}% годовых
                 </Text>
@@ -198,7 +263,9 @@ export function SavingsScreen() {
               <FormInput label="Ставка %" keyboardType="numeric" value={rate} onChangeText={setRate} />
               <DateField label="Дата открытия" value={openDate} onChange={setOpenDate} />
               <DateField label="Дата закрытия" value={closeDate} onChange={setCloseDate} />
-              <AppButton title="Сохранить вклад" onPress={handleAddDeposit} />
+              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить вклад'} onPress={handleAddDeposit} />
+              <View style={{ height: spacing.sm }} />
+              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
             </Card>
           ) : (
             <AppButton title="+ Добавить вклад" variant="outline" onPress={() => setShowForm(true)} />
@@ -218,7 +285,10 @@ export function SavingsScreen() {
                 <Card key={i.id}>
                   <View style={styles.rowBetween}>
                     <Text style={[styles.itemTitle, { color: theme.text }]}>{i.name}</Text>
-                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>{ASSET_LABELS[i.assetType]}</Text>
+                    <View style={styles.headerRight}>
+                      <Text style={{ color: theme.textMuted, fontSize: 12 }}>{ASSET_LABELS[i.assetType]}</Text>
+                      <CardActions onEdit={() => startEditInvestment(i)} onDelete={() => confirmDelete(i.name, () => removeInvestment(i.id))} />
+                    </View>
                   </View>
                   <Text style={{ color: theme.textMuted, marginTop: 4 }}>
                     {i.quantity} шт. по {formatCurrency(i.currentPrice, currency)}
@@ -252,7 +322,9 @@ export function SavingsScreen() {
                 value={currentPrice}
                 onChangeText={setCurrentPrice}
               />
-              <AppButton title="Сохранить актив" onPress={handleAddInvestment} />
+              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить актив'} onPress={handleAddInvestment} />
+              <View style={{ height: spacing.sm }} />
+              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
             </Card>
           ) : (
             <AppButton title="+ Добавить актив" variant="outline" onPress={() => setShowForm(true)} />
@@ -269,7 +341,10 @@ export function SavingsScreen() {
               <Card key={c.id}>
                 <View style={styles.rowBetween}>
                   <Text style={[styles.itemTitle, { color: theme.text }]}>{c.name}</Text>
-                  <Text style={{ color: theme.secondary, fontWeight: '700' }}>{c.cashbackPercent}%</Text>
+                  <View style={styles.headerRight}>
+                    <Text style={{ color: theme.secondary, fontWeight: '700' }}>{c.cashbackPercent}%</Text>
+                    <CardActions onEdit={() => startEditCashback(c)} onDelete={() => confirmDelete(c.name, () => removeCashbackCard(c.id))} />
+                  </View>
                 </View>
                 <Text style={{ color: theme.textMuted, marginTop: 4 }}>
                   Накоплено: {formatCurrency(c.accumulated, currency)}
@@ -281,7 +356,9 @@ export function SavingsScreen() {
             <Card>
               <FormInput label="Название карты" value={name} onChangeText={setName} />
               <FormInput label="Кэшбэк %" keyboardType="numeric" value={rate} onChangeText={setRate} />
-              <AppButton title="Сохранить карту" onPress={handleAddCashback} />
+              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить карту'} onPress={handleAddCashback} />
+              <View style={{ height: spacing.sm }} />
+              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
             </Card>
           ) : (
             <AppButton title="+ Добавить карту" variant="outline" onPress={() => setShowForm(true)} />
@@ -295,4 +372,5 @@ export function SavingsScreen() {
 const styles = StyleSheet.create({
   itemTitle: { fontSize: 15, fontWeight: '700' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

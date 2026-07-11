@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Alert } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
+import { CardActions } from '../../components/CardActions';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { ProgressBar } from '../../components/ProgressBar';
 import { FormInput } from '../../components/FormInput';
@@ -16,7 +17,8 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency } from '../../utils/format';
 import { calculateLoanRemaining, calculateMonthlyPayment } from '../../utils/calculations';
 import { schedulePaymentReminders, scheduleReminder, requestNotificationPermissions } from '../../utils/notifications';
-import type { DebtStatus } from '../../types';
+import { confirmDelete } from '../../utils/confirm';
+import type { DebtStatus, Credit, FriendDebt, InsurancePolicy } from '../../types';
 
 type Segment = 'credits' | 'calendar' | 'debts' | 'insurance';
 
@@ -29,6 +31,7 @@ export function CreditsScreen() {
   const currency = useSettingsStore((s) => s.currency);
   const [segment, setSegment] = useState<Segment>('credits');
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedCreditId, setExpandedCreditId] = useState<string | null>(null);
 
   const credits = useFinanceStore((s) => s.credits);
@@ -38,6 +41,9 @@ export function CreditsScreen() {
   const saveCredit = useFinanceStore((s) => s.saveCredit);
   const saveFriendDebt = useFinanceStore((s) => s.saveFriendDebt);
   const saveInsurancePolicy = useFinanceStore((s) => s.saveInsurancePolicy);
+  const removeCredit = useFinanceStore((s) => s.removeCredit);
+  const removeFriendDebt = useFinanceStore((s) => s.removeFriendDebt);
+  const removeInsurancePolicy = useFinanceStore((s) => s.removeInsurancePolicy);
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
@@ -60,25 +66,60 @@ export function CreditsScreen() {
     setInsuranceType('');
     setInsurer('');
     setShowForm(false);
+    setEditingId(null);
   };
+
+  const startEditCredit = (c: Credit) => {
+    setName(c.name);
+    setAmount(String(c.amount));
+    setRate(String(c.rate));
+    setTerm(String(c.termMonths));
+    setEditingId(c.id);
+    setShowForm(true);
+  };
+
+  const startEditDebt = (d: FriendDebt) => {
+    setPersonName(d.personName);
+    setAmount(String(d.amount));
+    setDebtStatus(d.status);
+    setReminderDate(d.reminderDate ?? new Date());
+    setEditingId(d.id);
+    setShowForm(true);
+  };
+
+  const startEditInsurance = (p: InsurancePolicy) => {
+    setInsuranceType(p.type);
+    setInsurer(p.insurer);
+    setAmount(String(p.amount));
+    setEndDate(p.endDate);
+    setEditingId(p.id);
+    setShowForm(true);
+  };
+
+  const isEditing = editingId !== null;
 
   const handleAddCredit = async () => {
     if (!name.trim() || !amount) return;
     const amt = parseFloat(amount);
     const rt = parseFloat(rate || '0');
     const tm = parseInt(term, 10) || 24;
-    const nextPaymentDate = new Date();
-    nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
+    const existing = editingId ? credits.find((c) => c.id === editingId) : undefined;
+    const nextPaymentDate = existing?.nextPaymentDate ?? (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 1);
+      return d;
+    })();
     await saveCredit({
+      ...(editingId ? { id: editingId } : {}),
       name: name.trim(),
       amount: amt,
       rate: rt,
       termMonths: tm,
       monthlyPayment: calculateMonthlyPayment(amt, rt, tm),
-      remaining: amt,
+      remaining: existing?.remaining ?? amt,
       nextPaymentDate,
-      startDate: new Date(),
-    });
+      startDate: existing?.startDate ?? new Date(),
+    } as Credit);
     resetForm();
   };
 
@@ -93,31 +134,38 @@ export function CreditsScreen() {
 
   const handleAddDebt = async () => {
     if (!personName.trim() || !amount) return;
+    const existing = editingId ? friendDebts.find((d) => d.id === editingId) : undefined;
     await saveFriendDebt({
+      ...(editingId ? { id: editingId } : {}),
       personName: personName.trim(),
       amount: parseFloat(amount),
       status: debtStatus,
-      isPaid: false,
+      isPaid: existing?.isPaid ?? false,
       reminderDate,
-    });
-    const granted = await requestNotificationPermissions();
-    if (granted) await schedulePaymentReminders(`Долг: ${personName.trim()}`, reminderDate);
+    } as FriendDebt);
+    if (!editingId) {
+      const granted = await requestNotificationPermissions();
+      if (granted) await schedulePaymentReminders(`Долг: ${personName.trim()}`, reminderDate);
+    }
     resetForm();
   };
 
   const handleAddInsurance = async () => {
     if (!insuranceType.trim() || !insurer.trim() || !amount) return;
     await saveInsurancePolicy({
+      ...(editingId ? { id: editingId } : {}),
       type: insuranceType.trim(),
       insurer: insurer.trim(),
       amount: parseFloat(amount),
       endDate,
-    });
-    const granted = await requestNotificationPermissions();
-    if (granted) {
-      const reminderAt = new Date(endDate);
-      reminderAt.setDate(reminderAt.getDate() - 30);
-      await scheduleReminder('Страховка скоро истекает', `${insuranceType.trim()} — окончание через 30 дней`, reminderAt);
+    } as InsurancePolicy);
+    if (!editingId) {
+      const granted = await requestNotificationPermissions();
+      if (granted) {
+        const reminderAt = new Date(endDate);
+        reminderAt.setDate(reminderAt.getDate() - 30);
+        await scheduleReminder('Страховка скоро истекает', `${insuranceType.trim()} — окончание через 30 дней`, reminderAt);
+      }
     }
     resetForm();
   };
@@ -164,7 +212,10 @@ export function CreditsScreen() {
                 <Card key={c.id}>
                   <View style={styles.rowBetween}>
                     <Text style={[styles.itemTitle, { color: theme.text }]}>{c.name}</Text>
-                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>{c.rate}%</Text>
+                    <View style={styles.headerRight}>
+                      <Text style={{ color: theme.textMuted, fontSize: 12 }}>{c.rate}%</Text>
+                      <CardActions onEdit={() => startEditCredit(c)} onDelete={() => confirmDelete(c.name, () => removeCredit(c.id))} />
+                    </View>
                   </View>
                   <ProgressBar percent={progress} />
                   <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
@@ -221,7 +272,9 @@ export function CreditsScreen() {
               <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
               <FormInput label="Ставка %" keyboardType="numeric" value={rate} onChangeText={setRate} />
               <FormInput label="Срок (мес.)" keyboardType="numeric" value={term} onChangeText={setTerm} />
-              <AppButton title="Сохранить кредит" onPress={handleAddCredit} />
+              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить кредит'} onPress={handleAddCredit} />
+              <View style={{ height: spacing.sm }} />
+              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
             </Card>
           ) : (
             <AppButton title="+ Добавить кредит" variant="outline" onPress={() => setShowForm(true)} />
@@ -247,9 +300,12 @@ export function CreditsScreen() {
               <Card key={d.id}>
                 <View style={styles.rowBetween}>
                   <Text style={[styles.itemTitle, { color: theme.text }]}>{d.personName}</Text>
-                  <Text style={{ color: d.status === 'i_owe' ? theme.expenseColor : theme.incomeColor, fontWeight: '700' }}>
-                    {formatCurrency(d.amount, currency)}
-                  </Text>
+                  <View style={styles.headerRight}>
+                    <Text style={{ color: d.status === 'i_owe' ? theme.expenseColor : theme.incomeColor, fontWeight: '700' }}>
+                      {formatCurrency(d.amount, currency)}
+                    </Text>
+                    <CardActions onEdit={() => startEditDebt(d)} onDelete={() => confirmDelete(d.personName, () => removeFriendDebt(d.id))} />
+                  </View>
                 </View>
                 <Text style={{ color: theme.textMuted, fontSize: 12 }}>
                   {d.status === 'i_owe' ? 'Я должен' : 'Мне должны'} · {d.isPaid ? 'Оплачено' : 'Не оплачено'}
@@ -270,7 +326,9 @@ export function CreditsScreen() {
                 ]}
               />
               <DateField label="Напомнить" value={reminderDate} onChange={setReminderDate} />
-              <AppButton title="Сохранить долг" onPress={handleAddDebt} />
+              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить долг'} onPress={handleAddDebt} />
+              <View style={{ height: spacing.sm }} />
+              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
             </Card>
           ) : (
             <AppButton title="+ Добавить долг" variant="outline" onPress={() => setShowForm(true)} />
@@ -287,7 +345,10 @@ export function CreditsScreen() {
               <Card key={p.id}>
                 <View style={styles.rowBetween}>
                   <Text style={[styles.itemTitle, { color: theme.text }]}>{p.type}</Text>
-                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>{p.insurer}</Text>
+                  <View style={styles.headerRight}>
+                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>{p.insurer}</Text>
+                    <CardActions onEdit={() => startEditInsurance(p)} onDelete={() => confirmDelete(p.type, () => removeInsurancePolicy(p.id))} />
+                  </View>
                 </View>
                 <Text style={{ color: theme.textMuted, marginTop: 4 }}>{formatCurrency(p.amount, currency)}</Text>
                 <Text style={{ color: theme.textMuted, fontSize: 12 }}>
@@ -302,7 +363,9 @@ export function CreditsScreen() {
               <FormInput label="Страховщик" value={insurer} onChangeText={setInsurer} />
               <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
               <DateField label="Дата окончания" value={endDate} onChange={setEndDate} />
-              <AppButton title="Сохранить полис" onPress={handleAddInsurance} />
+              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить полис'} onPress={handleAddInsurance} />
+              <View style={{ height: spacing.sm }} />
+              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
             </Card>
           ) : (
             <AppButton title="+ Добавить полис" variant="outline" onPress={() => setShowForm(true)} />
@@ -316,5 +379,6 @@ export function CreditsScreen() {
 const styles = StyleSheet.create({
   itemTitle: { fontSize: 15, fontWeight: '700' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
 });

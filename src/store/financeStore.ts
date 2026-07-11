@@ -42,6 +42,7 @@ interface FinanceState {
   loadAll: () => Promise<void>;
 
   addTransaction: (t: Omit<Transaction, 'id'>) => Promise<void>;
+  editTransaction: (t: Transaction) => Promise<void>;
   removeTransaction: (id: string) => Promise<void>;
 
   saveGoal: (g: Goal | Omit<Goal, 'id'>) => Promise<void>;
@@ -77,6 +78,7 @@ interface FinanceState {
   removeNotification: (id: string) => Promise<void>;
 
   saveCashbackCard: (c: CashbackCard | Omit<CashbackCard, 'id'>) => Promise<void>;
+  removeCashbackCard: (id: string) => Promise<void>;
 
   unlockAchievement: (id: string) => Promise<void>;
 
@@ -133,6 +135,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await repo.insertTransaction(transaction);
     set((state) => ({ transactions: [transaction, ...state.transactions] }));
     await get().checkAndUnlockAchievements();
+  },
+  editTransaction: async (t) => {
+    await repo.updateTransaction(t);
+    set((state) => ({ transactions: state.transactions.map((x) => (x.id === t.id ? t : x)) }));
   },
   removeTransaction: async (id) => {
     await repo.deleteTransaction(id);
@@ -294,6 +300,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         ? state.cashbackCards.map((x) => (x.id === card.id ? card : x))
         : [...state.cashbackCards, card],
     }));
+  },
+  removeCashbackCard: async (id) => {
+    await repo.deleteCashbackCard(id);
+    set((state) => ({ cashbackCards: state.cashbackCards.filter((c) => c.id !== id) }));
   },
 
   unlockAchievement: async (id) => {

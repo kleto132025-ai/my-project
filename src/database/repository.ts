@@ -42,6 +42,15 @@ export async function insertTransaction(t: Transaction): Promise<void> {
   );
 }
 
+export async function updateTransaction(t: Transaction): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE transactions SET amount = ?, category = ?, type = ?, date = ?, comment = ?, currency = ?, createdBy = ?
+     WHERE id = ?;`,
+    [t.amount, t.category, t.type, t.date.toISOString(), t.comment ?? null, t.currency, t.createdBy ?? null, t.id]
+  );
+}
+
 export async function deleteTransaction(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM transactions WHERE id = ?;', [id]);
@@ -352,6 +361,11 @@ export async function upsertCashbackCard(c: CashbackCard): Promise<void> {
        accumulated=excluded.accumulated;`,
     [c.id, c.name, c.cashbackPercent, c.accumulated]
   );
+}
+
+export async function deleteCashbackCard(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM cashback_cards WHERE id = ?;', [id]);
 }
 
 // ---------- Achievements ----------
