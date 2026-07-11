@@ -17,6 +17,7 @@ import {
   useTopCategories,
   useForecast,
   useBudgetLimitsWithSpent,
+  useDebtSummary,
 } from '../../hooks/useFinancials';
 import type { Transaction } from '../../types';
 
@@ -34,6 +35,7 @@ export function DashboardScreen() {
   const topExpenses = useTopCategories('expense', 3);
   const topIncomes = useTopCategories('income', 3);
   const forecast = useForecast(1);
+  const debtSummary = useDebtSummary();
 
   const isNegative = freeFunds < 0;
 
@@ -75,6 +77,42 @@ export function DashboardScreen() {
           </View>
         </View>
       </Card>
+
+      {debtSummary.totalRemaining > 0 && (
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Остаток долга</Text>
+          {debtSummary.creditsRemaining > 0 && (
+            <View style={styles.debtRow}>
+              <View style={styles.debtLabelRow}>
+                <Ionicons name="card-outline" size={16} color={theme.accent} />
+                <Text style={{ color: theme.text }}>Кредиты</Text>
+              </View>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>
+                {formatCurrency(debtSummary.creditsRemaining, currency)}
+              </Text>
+            </View>
+          )}
+          {debtSummary.mortgageRemaining > 0 && (
+            <View style={styles.debtRow}>
+              <View style={styles.debtLabelRow}>
+                <Ionicons name="home-outline" size={16} color={theme.accent} />
+                <Text style={{ color: theme.text }}>Ипотека</Text>
+              </View>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>
+                {formatCurrency(debtSummary.mortgageRemaining, currency)}
+              </Text>
+            </View>
+          )}
+          {debtSummary.creditsRemaining > 0 && debtSummary.mortgageRemaining > 0 && (
+            <View style={[styles.debtRow, styles.debtTotalRow, { borderTopColor: theme.border }]}>
+              <Text style={{ color: theme.textMuted, fontSize: 13 }}>Итого</Text>
+              <Text style={{ color: theme.accent, fontWeight: '800' }}>
+                {formatCurrency(debtSummary.totalRemaining, currency)}
+              </Text>
+            </View>
+          )}
+        </Card>
+      )}
 
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Последние транзакции</Text>
@@ -168,4 +206,7 @@ const styles = StyleSheet.create({
   limitRow: { marginBottom: spacing.sm },
   limitHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   categoryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  debtRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  debtLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  debtTotalRow: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 4, paddingTop: spacing.sm },
 });

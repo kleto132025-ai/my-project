@@ -92,3 +92,18 @@ export function useBudgetLimitsWithSpent(): BudgetLimit[] {
   const transactions = useNormalizedTransactions();
   return useMemo(() => withComputedSpent(limits, transactions), [limits, transactions]);
 }
+
+export interface DebtSummary {
+  creditsRemaining: number;
+  mortgageRemaining: number;
+  totalRemaining: number;
+}
+
+export function useDebtSummary(): DebtSummary {
+  const credits = useFinanceStore((s) => s.credits);
+  return useMemo(() => {
+    const creditsRemaining = credits.filter((c) => c.kind === 'credit').reduce((sum, c) => sum + c.remaining, 0);
+    const mortgageRemaining = credits.filter((c) => c.kind === 'mortgage').reduce((sum, c) => sum + c.remaining, 0);
+    return { creditsRemaining, mortgageRemaining, totalRemaining: creditsRemaining + mortgageRemaining };
+  }, [credits]);
+}

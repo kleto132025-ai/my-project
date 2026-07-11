@@ -45,6 +45,8 @@ export function CreditsScreen() {
 
   const credits = useMemo(() => allCredits.filter((c) => c.kind === 'credit'), [allCredits]);
   const mortgages = useMemo(() => allCredits.filter((c) => c.kind === 'mortgage'), [allCredits]);
+  const creditsTotalRemaining = useMemo(() => credits.reduce((sum, c) => sum + c.remaining, 0), [credits]);
+  const mortgageTotalRemaining = useMemo(() => mortgages.reduce((sum, c) => sum + c.remaining, 0), [mortgages]);
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
@@ -342,7 +344,13 @@ export function CreditsScreen() {
           {credits.length === 0 ? (
             <EmptyState title="Нет активных кредитов" />
           ) : (
-            credits.map(renderCreditCard)
+            <>
+              <Card style={[styles.summaryCard, { backgroundColor: theme.primary }]}>
+                <Text style={styles.summaryLabel}>Общий остаток по кредитам</Text>
+                <Text style={styles.summaryAmount}>{formatCurrency(creditsTotalRemaining, currency)}</Text>
+              </Card>
+              {credits.map(renderCreditCard)}
+            </>
           )}
           {showForm ? (
             renderCreditForm('Сохранить кредит')
@@ -357,7 +365,13 @@ export function CreditsScreen() {
           {mortgages.length === 0 ? (
             <EmptyState title="Нет ипотечных кредитов" />
           ) : (
-            mortgages.map(renderCreditCard)
+            <>
+              <Card style={[styles.summaryCard, { backgroundColor: theme.primary }]}>
+                <Text style={styles.summaryLabel}>Общий остаток по ипотеке</Text>
+                <Text style={styles.summaryAmount}>{formatCurrency(mortgageTotalRemaining, currency)}</Text>
+              </Card>
+              {mortgages.map(renderCreditCard)}
+            </>
           )}
           {showForm ? (
             renderCreditForm('Сохранить ипотеку')
@@ -466,4 +480,7 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  summaryCard: { padding: spacing.md },
+  summaryLabel: { color: '#E2E8F0', fontSize: 13, marginBottom: 4 },
+  summaryAmount: { color: '#FFFFFF', fontSize: 24, fontWeight: '800' },
 });
