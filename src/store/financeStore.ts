@@ -19,7 +19,8 @@ import type {
   UserProfile,
 } from '../types';
 import * as repo from '../database/repository';
-import { seedDemoDataIfNeeded } from '../database/seed';
+import { seedDemoDataIfNeeded, SEED_FLAG_KEY } from '../database/seed';
+import { setMeta } from '../database/client';
 import { calculateGoalProgress } from '../utils/calculations';
 
 interface FinanceState {
@@ -370,6 +371,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   resetAll: async () => {
     await repo.resetAllData();
+    // resetAllData() очищает и app_meta, а вместе с ним — флаг "демо-данные уже добавлены".
+    // Без этой строки следующий полный перезапуск приложения снова засеет демо-данные,
+    // и пользователь окажется ровно в той же ситуации, от которой пытался избавиться сбросом.
+    await setMeta(SEED_FLAG_KEY, 'true');
     set({
       transactions: [], goals: [], credits: [], creditRepayments: [], budgetLimits: [], regularPayments: [],
       deposits: [], investments: [], friendDebts: [], insurancePolicies: [], wishlistItems: [],
