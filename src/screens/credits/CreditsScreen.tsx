@@ -14,7 +14,7 @@ import { useTheme } from '../../theme';
 import { spacing } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateAmortizationStep, calculateMonthlyPayment } from '../../utils/calculations';
 import { schedulePaymentReminders, scheduleReminder, requestNotificationPermissions } from '../../utils/notifications';
 import { confirmDelete } from '../../utils/confirm';
@@ -250,7 +250,7 @@ export function CreditsScreen() {
         <View style={styles.rowBetween}>
           <Text style={[styles.itemTitle, { color: theme.text }]}>{c.name}</Text>
           <View style={styles.headerRight}>
-            <Text style={{ color: theme.textMuted, fontSize: 12 }}>{c.rate}%</Text>
+            <Text style={{ color: theme.textMuted, fontSize: 12 }}>{formatNumber(c.rate)}%</Text>
             <CardActions onEdit={() => startEditCredit(c)} onDelete={() => confirmDelete(c.name, () => removeCredit(c.id))} />
           </View>
         </View>

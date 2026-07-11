@@ -12,7 +12,7 @@ import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateBalance } from '../../utils/calculations';
 
 export function ProfileScreen() {
@@ -129,7 +129,7 @@ export function ProfileScreen() {
           cashbackCards.map((c) => (
             <View key={c.id} style={styles.cardRow}>
               <Text style={{ color: theme.text }}>{c.name}</Text>
-              <Text style={{ color: theme.secondary, fontWeight: '700' }}>{c.cashbackPercent}%</Text>
+              <Text style={{ color: theme.secondary, fontWeight: '700' }}>{formatNumber(c.cashbackPercent)}%</Text>
             </View>
           ))
         )}

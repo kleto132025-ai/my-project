@@ -13,7 +13,7 @@ import { useTheme } from '../../theme';
 import { spacing } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
 import { confirmDelete } from '../../utils/confirm';
 import type { AssetType, Goal, Deposit, Investment, CashbackCard } from '../../types';
@@ -249,7 +249,7 @@ export function SavingsScreen() {
                   <CardActions onEdit={() => startEditDeposit(d)} onDelete={() => confirmDelete(d.name, () => removeDeposit(d.id))} />
                 </View>
                 <Text style={{ color: theme.textMuted, marginTop: 4 }}>
-                  {formatCurrency(d.amount, currency)} · {d.rate}% годовых
+                  {formatCurrency(d.amount, currency)} · {formatNumber(d.rate)}% годовых
                 </Text>
                 <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
                   {d.openDate.toLocaleDateString('ru-RU')} — {d.closeDate.toLocaleDateString('ru-RU')}
@@ -296,7 +296,7 @@ export function SavingsScreen() {
                   </Text>
                   <Text style={{ color: profitPercent >= 0 ? theme.success : theme.danger, fontWeight: '700' }}>
                     {profitPercent >= 0 ? '+' : ''}
-                    {profitPercent.toFixed(1)}%
+                    {formatNumber(profitPercent)}%
                   </Text>
                 </Card>
               );
@@ -343,7 +343,7 @@ export function SavingsScreen() {
                 <View style={styles.rowBetween}>
                   <Text style={[styles.itemTitle, { color: theme.text }]}>{c.name}</Text>
                   <View style={styles.headerRight}>
-                    <Text style={{ color: theme.secondary, fontWeight: '700' }}>{c.cashbackPercent}%</Text>
+                    <Text style={{ color: theme.secondary, fontWeight: '700' }}>{formatNumber(c.cashbackPercent)}%</Text>
                     <CardActions onEdit={() => startEditCashback(c)} onDelete={() => confirmDelete(c.name, () => removeCashbackCard(c.id))} />
                   </View>
                 </View>
