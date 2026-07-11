@@ -244,18 +244,34 @@ export function CreditsScreen() {
     resetForm();
   };
 
-  const markedDates = useMemo(() => {
-    const set = new Set<string>();
-    const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    allCredits.forEach((c) => set.add(key(c.nextPaymentDate)));
-    friendDebts.forEach((d) => d.reminderDate && set.add(key(d.reminderDate)));
-    insurancePolicies.forEach((p) => set.add(key(p.endDate)));
+  const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, { label: string; amount: number }[]>();
+    const add = (d: Date, event: { label: string; amount: number }) => {
+      const k = dateKey(d);
+      const list = map.get(k);
+      if (list) list.push(event);
+      else map.set(k, [event]);
+    };
+    allCredits.forEach((c) =>
+      add(c.nextPaymentDate, {
+        label: `${c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'} «${c.name}»`,
+        amount: c.monthlyPayment,
+      })
+    );
+    friendDebts.forEach((d) => d.reminderDate && add(d.reminderDate, { label: `Долг: ${d.personName}`, amount: d.amount }));
+    insurancePolicies.forEach((p) => add(p.endDate, { label: `Страховка: ${p.type}`, amount: p.amount }));
     const now = new Date();
     regularPayments
       .filter((p) => p.isActive)
-      .forEach((p) => set.add(key(new Date(now.getFullYear(), now.getMonth(), p.dayOfMonth))));
-    return set;
+      .forEach((p) => add(new Date(now.getFullYear(), now.getMonth(), p.dayOfMonth), { label: p.name, amount: p.amount }));
+    return map;
   }, [allCredits, friendDebts, insurancePolicies, regularPayments]);
+
+  const markedDates = useMemo(() => new Set(eventsByDate.keys()), [eventsByDate]);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const selectedDateEvents = selectedDate ? eventsByDate.get(dateKey(selectedDate)) ?? [] : [];
 
   const renderCreditCard = (c: Credit) => {
     const progress = ((c.amount - c.remaining) / Math.max(c.amount, 1)) * 100;
@@ -516,10 +532,29 @@ export function CreditsScreen() {
 
       {segment === 'calendar' && (
         <Card>
-          <MiniCalendar markedDates={markedDates} />
+          <MiniCalendar markedDates={markedDates} onDayPress={setSelectedDate} />
           <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: spacing.sm }}>
-            Отмечены даты платежей по кредитам, регулярным платежам, долгам и страховкам. Напоминания приходят за 1 и 3 дня.
+            Отмечены даты платежей по кредитам, регулярным платежам, долгам и страховкам. Напоминания приходят за 1 и 3 дня. Нажмите на дату, чтобы увидеть, какой платёж на неё приходится.
           </Text>
+          {selectedDate && (
+            <View style={[styles.calendarFootnote, { borderTopColor: theme.border }]}>
+              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
+                {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </Text>
+              {selectedDateEvents.length === 0 ? (
+                <Text style={{ color: theme.textMuted, fontSize: 12 }}>На эту дату платежей не запланировано</Text>
+              ) : (
+                selectedDateEvents.map((event, i) => (
+                  <View key={i} style={styles.scheduleRow}>
+                    <Text style={{ color: theme.textMuted, fontSize: 12, flexShrink: 1 }}>{event.label}</Text>
+                    <Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>
+                      {formatCurrency(event.amount, currency)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
         </Card>
       )}
 
@@ -616,4 +651,5 @@ const styles = StyleSheet.create({
   summaryCard: { padding: spacing.md },
   summaryLabel: { color: '#E2E8F0', fontSize: 13, marginBottom: 4 },
   summaryAmount: { color: '#FFFFFF', fontSize: 24, fontWeight: '800' },
+  calendarFootnote: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
 });
