@@ -4,6 +4,7 @@ import type {
   Transaction,
   Goal,
   Credit,
+  CreditRepayment,
   BudgetLimit,
   RegularPayment,
   Deposit,
@@ -26,6 +27,7 @@ interface FinanceState {
   transactions: Transaction[];
   goals: Goal[];
   credits: Credit[];
+  creditRepayments: CreditRepayment[];
   budgetLimits: BudgetLimit[];
   regularPayments: RegularPayment[];
   deposits: Deposit[];
@@ -50,6 +52,8 @@ interface FinanceState {
 
   saveCredit: (c: Credit | Omit<Credit, 'id'>) => Promise<void>;
   removeCredit: (id: string) => Promise<void>;
+  /** Записывает частичное/полное досрочное погашение (с датой) и уменьшает остаток по кредиту. */
+  repayCredit: (creditId: string, amount: number, date: Date) => Promise<void>;
 
   saveBudgetLimit: (b: BudgetLimit | Omit<BudgetLimit, 'id'>) => Promise<void>;
   removeBudgetLimit: (id: string) => Promise<void>;
@@ -97,6 +101,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   transactions: [],
   goals: [],
   credits: [],
+  creditRepayments: [],
   budgetLimits: [],
   regularPayments: [],
   deposits: [],
@@ -113,18 +118,18 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   loadAll: async () => {
     await seedDemoDataIfNeeded();
     const [
-      transactions, goals, credits, budgetLimits, regularPayments, deposits, investments,
+      transactions, goals, credits, creditRepayments, budgetLimits, regularPayments, deposits, investments,
       friendDebts, insurancePolicies, wishlistItems, notifications, cashbackCards, achievements,
       recurringTemplates, profile,
     ] = await Promise.all([
-      repo.listTransactions(), repo.listGoals(), repo.listCredits(), repo.listBudgetLimits(),
+      repo.listTransactions(), repo.listGoals(), repo.listCredits(), repo.listCreditRepayments(), repo.listBudgetLimits(),
       repo.listRegularPayments(), repo.listDeposits(), repo.listInvestments(),
       repo.listFriendDebts(), repo.listInsurancePolicies(), repo.listWishlistItems(),
       repo.listNotifications(), repo.listCashbackCards(), repo.listAchievements(),
       repo.listRecurringTemplates(), repo.getUserProfile(),
     ]);
     set({
-      transactions, goals, credits, budgetLimits, regularPayments, deposits, investments,
+      transactions, goals, credits, creditRepayments, budgetLimits, regularPayments, deposits, investments,
       friendDebts, insurancePolicies, wishlistItems, notifications, cashbackCards, achievements,
       recurringTemplates, profile, isLoaded: true,
     });
@@ -171,7 +176,35 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
   removeCredit: async (id) => {
     await repo.deleteCredit(id);
-    set((state) => ({ credits: state.credits.filter((c) => c.id !== id) }));
+    set((state) => ({
+      credits: state.credits.filter((c) => c.id !== id),
+      creditRepayments: state.creditRepayments.filter((r) => r.creditId !== id),
+    }));
+  },
+
+  repayCredit: async (creditId, amount, date) => {
+    const credit = get().credits.find((c) => c.id === creditId);
+    if (!credit || amount <= 0) return;
+
+    const remaining = Math.max(credit.remaining - amount, 0);
+    const isFull = remaining <= 0;
+    const updatedCredit: Credit = { ...credit, remaining };
+    await repo.upsertCredit(updatedCredit);
+
+    const repayment: CreditRepayment = {
+      id: generateId(),
+      creditId,
+      date,
+      amount,
+      type: isFull ? 'full' : 'partial',
+    };
+    await repo.insertCreditRepayment(repayment);
+
+    set((state) => ({
+      credits: state.credits.map((c) => (c.id === creditId ? updatedCredit : c)),
+      creditRepayments: [repayment, ...state.creditRepayments],
+    }));
+    await get().checkAndUnlockAchievements();
   },
 
   saveBudgetLimit: async (b) => {
@@ -338,7 +371,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   resetAll: async () => {
     await repo.resetAllData();
     set({
-      transactions: [], goals: [], credits: [], budgetLimits: [], regularPayments: [],
+      transactions: [], goals: [], credits: [], creditRepayments: [], budgetLimits: [], regularPayments: [],
       deposits: [], investments: [], friendDebts: [], insurancePolicies: [], wishlistItems: [],
       notifications: [], cashbackCards: [], achievements: [], recurringTemplates: [], profile: null,
       isLoaded: false,

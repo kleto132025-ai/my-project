@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
 import { CardActions } from '../../components/CardActions';
@@ -18,13 +18,9 @@ import { formatCurrency } from '../../utils/format';
 import { calculateLoanRemaining, calculateMonthlyPayment } from '../../utils/calculations';
 import { schedulePaymentReminders, scheduleReminder, requestNotificationPermissions } from '../../utils/notifications';
 import { confirmDelete } from '../../utils/confirm';
-import type { DebtStatus, Credit, FriendDebt, InsurancePolicy } from '../../types';
+import type { DebtStatus, Credit, CreditKind, FriendDebt, InsurancePolicy } from '../../types';
 
-type Segment = 'credits' | 'calendar' | 'debts' | 'insurance';
-
-function monthsBetween(a: Date, b: Date): number {
-  return Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()));
-}
+type Segment = 'credits' | 'mortgage' | 'calendar' | 'debts' | 'insurance';
 
 export function CreditsScreen() {
   const theme = useTheme();
@@ -34,7 +30,8 @@ export function CreditsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedCreditId, setExpandedCreditId] = useState<string | null>(null);
 
-  const credits = useFinanceStore((s) => s.credits);
+  const allCredits = useFinanceStore((s) => s.credits);
+  const creditRepayments = useFinanceStore((s) => s.creditRepayments);
   const regularPayments = useFinanceStore((s) => s.regularPayments);
   const friendDebts = useFinanceStore((s) => s.friendDebts);
   const insurancePolicies = useFinanceStore((s) => s.insurancePolicies);
@@ -44,11 +41,18 @@ export function CreditsScreen() {
   const removeCredit = useFinanceStore((s) => s.removeCredit);
   const removeFriendDebt = useFinanceStore((s) => s.removeFriendDebt);
   const removeInsurancePolicy = useFinanceStore((s) => s.removeInsurancePolicy);
+  const repayCredit = useFinanceStore((s) => s.repayCredit);
+
+  const credits = useMemo(() => allCredits.filter((c) => c.kind === 'credit'), [allCredits]);
+  const mortgages = useMemo(() => allCredits.filter((c) => c.kind === 'mortgage'), [allCredits]);
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [rate, setRate] = useState('');
   const [term, setTerm] = useState('24');
+  const [issueDate, setIssueDate] = useState(new Date());
+  const [propertyAddress, setPropertyAddress] = useState('');
+  const [downPayment, setDownPayment] = useState('');
   const [personName, setPersonName] = useState('');
   const [debtStatus, setDebtStatus] = useState<DebtStatus>('i_owe');
   const [reminderDate, setReminderDate] = useState(new Date(Date.now() + 7 * 24 * 3600 * 1000));
@@ -56,12 +60,16 @@ export function CreditsScreen() {
   const [insurer, setInsurer] = useState('');
   const [endDate, setEndDate] = useState(new Date(Date.now() + 90 * 24 * 3600 * 1000));
   const [earlyRepayAmount, setEarlyRepayAmount] = useState('');
+  const [repayDate, setRepayDate] = useState(new Date());
 
   const resetForm = () => {
     setName('');
     setAmount('');
     setRate('');
     setTerm('24');
+    setIssueDate(new Date());
+    setPropertyAddress('');
+    setDownPayment('');
     setPersonName('');
     setInsuranceType('');
     setInsurer('');
@@ -74,6 +82,9 @@ export function CreditsScreen() {
     setAmount(String(c.amount));
     setRate(String(c.rate));
     setTerm(String(c.termMonths));
+    setIssueDate(c.startDate);
+    setPropertyAddress(c.propertyAddress ?? '');
+    setDownPayment(c.downPayment !== undefined ? String(c.downPayment) : '');
     setEditingId(c.id);
     setShowForm(true);
   };
@@ -97,13 +108,14 @@ export function CreditsScreen() {
   };
 
   const isEditing = editingId !== null;
+  const formKind: CreditKind = segment === 'mortgage' ? 'mortgage' : 'credit';
 
   const handleAddCredit = async () => {
     if (!name.trim() || !amount) return;
     const amt = parseFloat(amount);
     const rt = parseFloat(rate || '0');
     const tm = parseInt(term, 10) || 24;
-    const existing = editingId ? credits.find((c) => c.id === editingId) : undefined;
+    const existing = editingId ? allCredits.find((c) => c.id === editingId) : undefined;
     const nextPaymentDate = existing?.nextPaymentDate ?? (() => {
       const d = new Date();
       d.setMonth(d.getMonth() + 1);
@@ -111,6 +123,7 @@ export function CreditsScreen() {
     })();
     await saveCredit({
       ...(editingId ? { id: editingId } : {}),
+      kind: existing?.kind ?? formKind,
       name: name.trim(),
       amount: amt,
       rate: rt,
@@ -118,18 +131,19 @@ export function CreditsScreen() {
       monthlyPayment: calculateMonthlyPayment(amt, rt, tm),
       remaining: existing?.remaining ?? amt,
       nextPaymentDate,
-      startDate: existing?.startDate ?? new Date(),
+      startDate: issueDate,
+      propertyAddress: formKind === 'mortgage' ? propertyAddress.trim() || undefined : undefined,
+      downPayment: formKind === 'mortgage' && downPayment ? parseFloat(downPayment) : undefined,
     } as Credit);
     resetForm();
   };
 
-  const handleEarlyRepay = async (creditId: string) => {
-    const credit = credits.find((c) => c.id === creditId);
+  const handleRepay = async (creditId: string) => {
     const repayAmount = parseFloat(earlyRepayAmount);
-    if (!credit || Number.isNaN(repayAmount) || repayAmount <= 0) return;
-    await saveCredit({ ...credit, remaining: Math.max(credit.remaining - repayAmount, 0) });
+    if (Number.isNaN(repayAmount) || repayAmount <= 0) return;
+    await repayCredit(creditId, repayAmount, repayDate);
     setEarlyRepayAmount('');
-    Alert.alert('Готово', 'Досрочное погашение учтено');
+    setRepayDate(new Date());
   };
 
   const handleAddDebt = async () => {
@@ -173,7 +187,7 @@ export function CreditsScreen() {
   const markedDates = useMemo(() => {
     const set = new Set<string>();
     const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    credits.forEach((c) => set.add(key(c.nextPaymentDate)));
+    allCredits.forEach((c) => set.add(key(c.nextPaymentDate)));
     friendDebts.forEach((d) => d.reminderDate && set.add(key(d.reminderDate)));
     insurancePolicies.forEach((p) => set.add(key(p.endDate)));
     const now = new Date();
@@ -181,7 +195,130 @@ export function CreditsScreen() {
       .filter((p) => p.isActive)
       .forEach((p) => set.add(key(new Date(now.getFullYear(), now.getMonth(), p.dayOfMonth))));
     return set;
-  }, [credits, friendDebts, insurancePolicies, regularPayments]);
+  }, [allCredits, friendDebts, insurancePolicies, regularPayments]);
+
+  const renderCreditCard = (c: Credit) => {
+    const progress = ((c.amount - c.remaining) / Math.max(c.amount, 1)) * 100;
+    const isExpanded = expandedCreditId === c.id;
+    const history = creditRepayments
+      .filter((r) => r.creditId === c.id)
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
+    const fullRepayment = history.find((r) => r.type === 'full');
+
+    return (
+      <Card key={c.id}>
+        <View style={styles.rowBetween}>
+          <Text style={[styles.itemTitle, { color: theme.text }]}>{c.name}</Text>
+          <View style={styles.headerRight}>
+            <Text style={{ color: theme.textMuted, fontSize: 12 }}>{c.rate}%</Text>
+            <CardActions onEdit={() => startEditCredit(c)} onDelete={() => confirmDelete(c.name, () => removeCredit(c.id))} />
+          </View>
+        </View>
+        <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+          Дата выдачи: {c.startDate.toLocaleDateString('ru-RU')}
+        </Text>
+        {c.kind === 'mortgage' && (c.propertyAddress || c.downPayment !== undefined) && (
+          <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+            {c.propertyAddress ? `Объект: ${c.propertyAddress}` : ''}
+            {c.propertyAddress && c.downPayment !== undefined ? ' · ' : ''}
+            {c.downPayment !== undefined ? `Первонач. взнос: ${formatCurrency(c.downPayment, currency)}` : ''}
+          </Text>
+        )}
+        <ProgressBar percent={progress} />
+        <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
+          Остаток: {formatCurrency(c.remaining, currency)} · Платёж: {formatCurrency(c.monthlyPayment, currency)}/мес
+        </Text>
+        {fullRepayment && (
+          <Text style={{ color: theme.success, marginTop: 4, fontSize: 12, fontWeight: '600' }}>
+            Полностью погашен: {fullRepayment.date.toLocaleDateString('ru-RU')}
+          </Text>
+        )}
+        <AppButton
+          title={isExpanded ? 'Скрыть график' : 'График погашения'}
+          variant="outline"
+          onPress={() => setExpandedCreditId(isExpanded ? null : c.id)}
+        />
+        {isExpanded && (
+          <View style={{ marginTop: spacing.sm }}>
+            {/* Показываем не больше 12 строк графика — при сроке в 60 месяцев
+                рендерить весь список сразу незачем, ниже есть пояснение об усечении. */}
+            {Array.from({ length: Math.min(c.termMonths, 12) }).map((_, i) => {
+              const month = i + 1;
+              const remaining = calculateLoanRemaining(c.amount, c.rate, month, c.termMonths);
+              return (
+                <View key={month} style={styles.scheduleRow}>
+                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>Месяц {month}</Text>
+                  <Text style={{ color: theme.text, fontSize: 12 }}>
+                    {formatCurrency(c.monthlyPayment, currency)}
+                  </Text>
+                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                    Остаток: {formatCurrency(remaining, currency)}
+                  </Text>
+                </View>
+              );
+            })}
+            {c.termMonths > 12 && (
+              <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 4 }}>
+                Показаны первые 12 месяцев из {c.termMonths}
+              </Text>
+            )}
+
+            {history.length > 0 && (
+              <View style={{ marginTop: spacing.sm }}>
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
+                  История погашений
+                </Text>
+                {history.map((r) => (
+                  <View key={r.id} style={styles.scheduleRow}>
+                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                      {r.date.toLocaleDateString('ru-RU')}
+                    </Text>
+                    <Text style={{ color: theme.text, fontSize: 12 }}>{formatCurrency(r.amount, currency)}</Text>
+                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                      {r.type === 'full' ? 'Полное' : 'Частичное'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {c.remaining > 0 && (
+              <View style={{ marginTop: spacing.sm }}>
+                <FormInput
+                  label="Сумма досрочного погашения"
+                  keyboardType="numeric"
+                  value={earlyRepayAmount}
+                  onChangeText={setEarlyRepayAmount}
+                  placeholder="Сумма"
+                />
+                <DateField label="Дата погашения" value={repayDate} onChange={setRepayDate} />
+                <AppButton title="Погасить" onPress={() => handleRepay(c.id)} />
+              </View>
+            )}
+          </View>
+        )}
+      </Card>
+    );
+  };
+
+  const renderCreditForm = (submitLabel: string) => (
+    <Card>
+      <FormInput label="Название" value={name} onChangeText={setName} />
+      <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
+      <FormInput label="Ставка %" keyboardType="numeric" value={rate} onChangeText={setRate} />
+      <FormInput label="Срок (мес.)" keyboardType="numeric" value={term} onChangeText={setTerm} />
+      <DateField label="Дата выдачи" value={issueDate} onChange={setIssueDate} />
+      {formKind === 'mortgage' && (
+        <>
+          <FormInput label="Объект недвижимости" value={propertyAddress} onChangeText={setPropertyAddress} placeholder="Адрес или описание" />
+          <FormInput label="Первоначальный взнос" keyboardType="numeric" value={downPayment} onChangeText={setDownPayment} />
+        </>
+      )}
+      <AppButton title={isEditing ? 'Сохранить изменения' : submitLabel} onPress={handleAddCredit} />
+      <View style={{ height: spacing.sm }} />
+      <AppButton title="Отмена" variant="outline" onPress={resetForm} />
+    </Card>
+  );
 
   return (
     <ScreenContainer>
@@ -193,6 +330,7 @@ export function CreditsScreen() {
         }}
         options={[
           { label: 'Кредиты', value: 'credits' },
+          { label: 'Ипотека', value: 'mortgage' },
           { label: 'Календарь', value: 'calendar' },
           { label: 'Долги', value: 'debts' },
           { label: 'Страховка', value: 'insurance' },
@@ -204,80 +342,27 @@ export function CreditsScreen() {
           {credits.length === 0 ? (
             <EmptyState title="Нет активных кредитов" />
           ) : (
-            credits.map((c) => {
-              const paidMonths = monthsBetween(c.startDate, new Date());
-              const progress = ((c.amount - c.remaining) / Math.max(c.amount, 1)) * 100;
-              const isExpanded = expandedCreditId === c.id;
-              return (
-                <Card key={c.id}>
-                  <View style={styles.rowBetween}>
-                    <Text style={[styles.itemTitle, { color: theme.text }]}>{c.name}</Text>
-                    <View style={styles.headerRight}>
-                      <Text style={{ color: theme.textMuted, fontSize: 12 }}>{c.rate}%</Text>
-                      <CardActions onEdit={() => startEditCredit(c)} onDelete={() => confirmDelete(c.name, () => removeCredit(c.id))} />
-                    </View>
-                  </View>
-                  <ProgressBar percent={progress} />
-                  <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
-                    Остаток: {formatCurrency(c.remaining, currency)} · Платёж: {formatCurrency(c.monthlyPayment, currency)}/мес
-                  </Text>
-                  <AppButton
-                    title={isExpanded ? 'Скрыть график' : 'График погашения'}
-                    variant="outline"
-                    onPress={() => setExpandedCreditId(isExpanded ? null : c.id)}
-                  />
-                  {isExpanded && (
-                    <View style={{ marginTop: spacing.sm }}>
-                      {/* Показываем не больше 12 строк графика — при сроке в 60 месяцев
-                          рендерить весь список сразу незачем, ниже есть пояснение об усечении. */}
-                      {Array.from({ length: Math.min(c.termMonths, 12) }).map((_, i) => {
-                        const month = i + 1;
-                        const remaining = calculateLoanRemaining(c.amount, c.rate, month, c.termMonths);
-                        return (
-                          <View key={month} style={styles.scheduleRow}>
-                            <Text style={{ color: theme.textMuted, fontSize: 12 }}>Месяц {month}</Text>
-                            <Text style={{ color: theme.text, fontSize: 12 }}>
-                              {formatCurrency(c.monthlyPayment, currency)}
-                            </Text>
-                            <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                              Остаток: {formatCurrency(remaining, currency)}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                      {c.termMonths > 12 && (
-                        <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 4 }}>
-                          Показаны первые 12 месяцев из {c.termMonths}
-                        </Text>
-                      )}
-                      <View style={{ marginTop: spacing.sm }}>
-                        <FormInput
-                          label="Досрочное погашение"
-                          keyboardType="numeric"
-                          value={earlyRepayAmount}
-                          onChangeText={setEarlyRepayAmount}
-                          placeholder="Сумма"
-                        />
-                        <AppButton title="Погасить досрочно" onPress={() => handleEarlyRepay(c.id)} />
-                      </View>
-                    </View>
-                  )}
-                </Card>
-              );
-            })
+            credits.map(renderCreditCard)
           )}
           {showForm ? (
-            <Card>
-              <FormInput label="Название" value={name} onChangeText={setName} />
-              <FormInput label="Сумма" keyboardType="numeric" value={amount} onChangeText={setAmount} />
-              <FormInput label="Ставка %" keyboardType="numeric" value={rate} onChangeText={setRate} />
-              <FormInput label="Срок (мес.)" keyboardType="numeric" value={term} onChangeText={setTerm} />
-              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить кредит'} onPress={handleAddCredit} />
-              <View style={{ height: spacing.sm }} />
-              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
-            </Card>
+            renderCreditForm('Сохранить кредит')
           ) : (
             <AppButton title="+ Добавить кредит" variant="outline" onPress={() => setShowForm(true)} />
+          )}
+        </>
+      )}
+
+      {segment === 'mortgage' && (
+        <>
+          {mortgages.length === 0 ? (
+            <EmptyState title="Нет ипотечных кредитов" />
+          ) : (
+            mortgages.map(renderCreditCard)
+          )}
+          {showForm ? (
+            renderCreditForm('Сохранить ипотеку')
+          ) : (
+            <AppButton title="+ Добавить ипотеку" variant="outline" onPress={() => setShowForm(true)} />
           )}
         </>
       )}

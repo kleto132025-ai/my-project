@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS goals (
 
 CREATE TABLE IF NOT EXISTS credits (
   id TEXT PRIMARY KEY NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'credit',
   name TEXT NOT NULL,
   amount REAL NOT NULL,
   rate REAL NOT NULL,
@@ -36,7 +37,20 @@ CREATE TABLE IF NOT EXISTS credits (
   monthlyPayment REAL NOT NULL,
   remaining REAL NOT NULL,
   nextPaymentDate TEXT NOT NULL,
-  startDate TEXT NOT NULL
+  startDate TEXT NOT NULL,
+  propertyAddress TEXT,
+  downPayment REAL
+);
+
+-- История досрочных погашений: одна запись на каждое частичное или полное погашение,
+-- чтобы у кредита/ипотеки была видна не только текущая сумма остатка, но и когда именно
+-- и на сколько его гасили.
+CREATE TABLE IF NOT EXISTS credit_repayments (
+  id TEXT PRIMARY KEY NOT NULL,
+  creditId TEXT NOT NULL,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL,
+  type TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS budget_limits (

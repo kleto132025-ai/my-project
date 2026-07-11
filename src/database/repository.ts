@@ -3,6 +3,7 @@ import type {
   Transaction,
   Goal,
   Credit,
+  CreditRepayment,
   BudgetLimit,
   RegularPayment,
   Deposit,
@@ -117,18 +118,53 @@ export async function listCredits(): Promise<Credit[]> {
 export async function upsertCredit(c: Credit): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO credits (id, name, amount, rate, termMonths, monthlyPayment, remaining, nextPaymentDate, startDate)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET name=excluded.name, amount=excluded.amount, rate=excluded.rate,
+    `INSERT INTO credits (id, kind, name, amount, rate, termMonths, monthlyPayment, remaining, nextPaymentDate, startDate, propertyAddress, downPayment)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, name=excluded.name, amount=excluded.amount, rate=excluded.rate,
        termMonths=excluded.termMonths, monthlyPayment=excluded.monthlyPayment, remaining=excluded.remaining,
-       nextPaymentDate=excluded.nextPaymentDate, startDate=excluded.startDate;`,
-    [c.id, c.name, c.amount, c.rate, c.termMonths, c.monthlyPayment, c.remaining, c.nextPaymentDate.toISOString(), c.startDate.toISOString()]
+       nextPaymentDate=excluded.nextPaymentDate, startDate=excluded.startDate,
+       propertyAddress=excluded.propertyAddress, downPayment=excluded.downPayment;`,
+    [
+      c.id,
+      c.kind,
+      c.name,
+      c.amount,
+      c.rate,
+      c.termMonths,
+      c.monthlyPayment,
+      c.remaining,
+      c.nextPaymentDate.toISOString(),
+      c.startDate.toISOString(),
+      c.propertyAddress ?? null,
+      c.downPayment ?? null,
+    ]
   );
 }
 
 export async function deleteCredit(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM credits WHERE id = ?;', [id]);
+  await db.runAsync('DELETE FROM credit_repayments WHERE creditId = ?;', [id]);
+}
+
+// ---------- Credit repayments ----------
+
+type CreditRepaymentRow = Omit<CreditRepayment, 'date'> & { date: string };
+
+export async function listCreditRepayments(): Promise<CreditRepayment[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<CreditRepaymentRow>(
+    'SELECT * FROM credit_repayments ORDER BY date DESC;'
+  );
+  return rows.map((r) => ({ ...r, date: new Date(r.date) }));
+}
+
+export async function insertCreditRepayment(r: CreditRepayment): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO credit_repayments (id, creditId, date, amount, type) VALUES (?, ?, ?, ?, ?);`,
+    [r.id, r.creditId, r.date.toISOString(), r.amount, r.type]
+  );
 }
 
 // ---------- Budget limits ----------
@@ -444,7 +480,7 @@ export async function upsertUserProfile(p: UserProfile): Promise<void> {
 export async function resetAllData(): Promise<void> {
   const db = await getDb();
   const tables = [
-    'transactions', 'goals', 'credits', 'budget_limits', 'regular_payments', 'deposits',
+    'transactions', 'goals', 'credits', 'credit_repayments', 'budget_limits', 'regular_payments', 'deposits',
     'investments', 'friend_debts', 'insurance_policies', 'wishlist_items', 'notifications',
     'cashback_cards', 'achievements', 'recurring_templates', 'user_profile', 'app_meta',
   ];

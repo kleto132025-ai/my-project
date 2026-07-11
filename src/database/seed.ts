@@ -72,6 +72,7 @@ export async function seedDemoDataIfNeeded(): Promise<void> {
   const creditTerm = 24;
   await upsertCredit({
     id: generateId(),
+    kind: 'credit',
     name: 'Потребительский кредит',
     amount: creditAmount,
     rate: creditRate,

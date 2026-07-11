@@ -27,8 +27,11 @@ export interface Goal {
   partnerSavedAmount?: number;
 }
 
+export type CreditKind = 'credit' | 'mortgage';
+
 export interface Credit {
   id: string;
+  kind: CreditKind;
   name: string;
   amount: number;
   rate: number;
@@ -36,7 +39,22 @@ export interface Credit {
   monthlyPayment: number;
   remaining: number;
   nextPaymentDate: Date;
+  /** Дата выдачи кредита. */
   startDate: Date;
+  /** Только для kind === 'mortgage'. */
+  propertyAddress?: string;
+  /** Только для kind === 'mortgage'. */
+  downPayment?: number;
+}
+
+export type CreditRepaymentType = 'partial' | 'full';
+
+export interface CreditRepayment {
+  id: string;
+  creditId: string;
+  date: Date;
+  amount: number;
+  type: CreditRepaymentType;
 }
 
 export type BudgetPeriod = 'month' | 'quarter' | 'year';
