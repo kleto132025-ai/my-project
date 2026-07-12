@@ -47,6 +47,17 @@ describe('reviveBackupData', () => {
     expect(data.transactions).toBeUndefined();
     expect(data.goals).toBeUndefined();
   });
+
+  it('revives notification dates', () => {
+    const raw = {
+      notifications: [
+        { id: 'n1', type: 'payment', title: 'Платёж', message: 'Скоро списание', date: '2026-06-01T00:00:00.000Z', isRead: false },
+      ],
+    };
+    const data = reviveBackupData(raw);
+    expect(data.notifications?.[0].date).toBeInstanceOf(Date);
+    expect(data.notifications?.[0].date.toISOString()).toBe('2026-06-01T00:00:00.000Z');
+  });
 });
 
 describe('countBackupEntries', () => {

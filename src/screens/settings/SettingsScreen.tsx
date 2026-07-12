@@ -79,6 +79,7 @@ export function SettingsScreen() {
       friendDebts: financeState.friendDebts,
       insurancePolicies: financeState.insurancePolicies,
       wishlistItems: financeState.wishlistItems,
+      notifications: financeState.notifications,
       cashbackCards: financeState.cashbackCards,
       achievements: financeState.achievements,
       recurringTemplates: financeState.recurringTemplates,

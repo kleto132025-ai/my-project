@@ -638,6 +638,17 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (data.friendDebts) for (const d of data.friendDebts) await repo.upsertFriendDebt(d);
     if (data.insurancePolicies) for (const p of data.insurancePolicies) await repo.upsertInsurancePolicy(p);
     if (data.wishlistItems) for (const w of data.wishlistItems) await repo.upsertWishlistItem(w);
+    if (data.notifications) {
+      // У уведомлений нет update-обёртки (только markRead/markAllRead) — при совпадении id
+      // повторную запись просто пропускаем, как и с начислениями по накопительным счетам.
+      for (const n of data.notifications) {
+        try {
+          await repo.insertNotification(n);
+        } catch {
+          // уже импортировано ранее — пропускаем
+        }
+      }
+    }
     if (data.cashbackCards) for (const c of data.cashbackCards) await repo.upsertCashbackCard(c);
     if (data.achievements) for (const a of data.achievements) await repo.upsertAchievement(a);
     if (data.recurringTemplates) for (const t of data.recurringTemplates) await repo.upsertRecurringTemplate(t);

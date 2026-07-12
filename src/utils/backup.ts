@@ -13,6 +13,7 @@ import type {
   FriendDebt,
   InsurancePolicy,
   WishlistItem,
+  AppNotification,
   CashbackCard,
   Achievement,
   RecurringTemplate,
@@ -38,6 +39,7 @@ export interface BackupData {
   friendDebts?: FriendDebt[];
   insurancePolicies?: InsurancePolicy[];
   wishlistItems?: WishlistItem[];
+  notifications?: AppNotification[];
   cashbackCards?: CashbackCard[];
   achievements?: Achievement[];
   recurringTemplates?: RecurringTemplate[];
@@ -106,6 +108,7 @@ export function reviveBackupData(raw: unknown): BackupData {
       paymentFrequency: p.paymentFrequency ?? 'annual',
     })),
     wishlistItems: reviveArray<WishlistItem>(data.wishlistItems, (w) => ({ ...w })),
+    notifications: reviveArray<AppNotification>(data.notifications, (n) => ({ ...n, date: reviveDate(n.date) ?? new Date() })),
     cashbackCards: reviveArray<CashbackCard>(data.cashbackCards, (c) => ({ ...c })),
     achievements: reviveArray<Achievement>(data.achievements, (a) => ({
       ...a,

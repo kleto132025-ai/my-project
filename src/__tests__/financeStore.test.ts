@@ -325,4 +325,12 @@ describe('financeStore.importBackup', () => {
     await expect(useFinanceStore.getState().importBackup({ savingsAccruals: [accrual] })).resolves.toBeUndefined();
     expect(repo.insertSavingsAccrual).toHaveBeenCalledWith(accrual);
   });
+
+  it('silently skips a duplicate notification instead of throwing', async () => {
+    (repo.insertNotification as jest.Mock).mockRejectedValueOnce(new Error('UNIQUE constraint failed'));
+    const notification = { id: 'n1', type: 'payment' as const, title: 'X', message: 'Y', date: new Date(), isRead: false };
+
+    await expect(useFinanceStore.getState().importBackup({ notifications: [notification] })).resolves.toBeUndefined();
+    expect(repo.insertNotification).toHaveBeenCalledWith(notification);
+  });
 });
