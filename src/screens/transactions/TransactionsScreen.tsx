@@ -9,8 +9,11 @@ import { FloatingAddButton } from '../../components/FloatingAddButton';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useFreeFunds } from '../../hooks/useFinancials';
 import { confirmDelete } from '../../utils/confirm';
+import { formatCurrency } from '../../utils/format';
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } from '../../theme/categoryIcons';
 import type { Transaction, TransactionType } from '../../types';
 
@@ -31,6 +34,8 @@ export function TransactionsScreen() {
   const navigation = useNavigation<any>();
   const transactions = useFinanceStore((s) => s.transactions);
   const removeTransaction = useFinanceStore((s) => s.removeTransaction);
+  const currency = useSettingsStore((s) => s.currency);
+  const cashBalance = useFreeFunds();
 
   const [type, setType] = useState<TransactionType>('expense');
   const [period, setPeriod] = useState<PeriodFilter>('month');
@@ -71,6 +76,13 @@ export function TransactionsScreen() {
 
   const filtersHeader = (
     <View>
+      <View style={[styles.balanceRow, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <Text style={{ color: theme.textMuted, fontSize: 12 }}>Остаток ДС по текущим счетам</Text>
+        <Text style={{ color: cashBalance < 0 ? theme.danger : theme.text, fontSize: 18, fontWeight: '800' }}>
+          {formatCurrency(cashBalance, currency)}
+        </Text>
+      </View>
+
       <SegmentedControl
         value={type}
         onChange={(v) => {
@@ -155,6 +167,13 @@ export function TransactionsScreen() {
 }
 
 const styles = StyleSheet.create({
+  balanceRow: {
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    marginBottom: spacing.md,
+  },
   search: {
     borderWidth: 1,
     borderRadius: radius.md,

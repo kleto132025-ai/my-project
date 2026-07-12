@@ -307,6 +307,11 @@ export function CreditsScreen() {
       c.currentValue != null
         ? c.currentValue - (c.amount + (c.downPayment ?? 0)) - totalInterestPaid - (c.renovationCosts ?? 0) - totalInsuranceCost
         : null;
+    // Отдельная величина от "чистой прибыли": сколько денег реально останется на руках, если
+    // продать объект сегодня. Здесь как раз нужно вычесть остаток основного долга — банку
+    // придётся вернуть именно c.remaining из суммы продажи, это не вопрос доходности, а вопрос
+    // наличных после сделки.
+    const saleProceeds = c.currentValue != null ? c.currentValue - c.remaining : null;
 
     // График строится не от исходной суммы кредита, а от текущего фактического остатка
     // (c.remaining) — иначе после любых внесённых платежей график продолжал бы показывать
@@ -373,6 +378,9 @@ export function CreditsScreen() {
               <>
                 <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
                   Текущая стоимость объекта: {formatCurrency(c.currentValue, currency)}
+                </Text>
+                <Text style={{ color: theme.text, fontSize: 12, marginBottom: 2 }}>
+                  Останется при продаже сегодня (за вычетом остатка долга): {formatCurrency(saleProceeds ?? 0, currency)}
                 </Text>
                 <Text
                   style={{
