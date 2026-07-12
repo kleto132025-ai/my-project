@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -21,16 +21,33 @@ export function AiInsightsScreen() {
   const currency = useSettingsStore((s) => s.currency);
   const hasApiKey = useAiStore((s) => s.hasApiKey);
   const getApiKey = useAiStore((s) => s.getApiKey);
+  const lastPrompt = useAiStore((s) => s.lastPrompt);
+  const lastInsight = useAiStore((s) => s.lastInsight);
+  const setLastInsight = useAiStore((s) => s.setLastInsight);
   const topExpenseCategories = useTopCategories('expense', 5);
   const budgetLimits = useBudgetLimitsWithSpent();
 
   const insights = useMemo(() => generateInsights(transactions), [transactions]);
 
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiResponse, setAiResponse] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  const handleAskAi = async () => {
+  // Промпт строится из тех же агрегированных цифр, что уже показаны на экранах приложения —
+  // если с прошлого анализа они не изменились (ничего нового не внесено), промпт будет
+  // побайтово таким же, что и в кэше, и повторный платный запрос к ИИ не нужен.
+  const currentPrompt = useMemo(() => {
+    const totalIncome = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const totalExpense = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+    return buildFinancialSummaryPrompt({
+      totalIncome,
+      totalExpense,
+      currency,
+      topExpenseCategories,
+      budgetLimits: budgetLimits.map((l) => ({ category: l.category, limit: l.limit, spent: l.spent })),
+    });
+  }, [transactions, currency, topExpenseCategories, budgetLimits]);
+
+  const runAiAnalysis = async (prompt: string) => {
     setAiLoading(true);
     setAiError(null);
     try {
@@ -39,23 +56,25 @@ export function AiInsightsScreen() {
         setAiError('API-ключ не найден — добавьте его в Настройках');
         return;
       }
-      const totalIncome = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-      const totalExpense = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-      const prompt = buildFinancialSummaryPrompt({
-        totalIncome,
-        totalExpense,
-        currency,
-        topExpenseCategories,
-        budgetLimits: budgetLimits.map((l) => ({ category: l.category, limit: l.limit, spent: l.spent })),
-      });
       const response = await askClaude(apiKey, prompt);
-      setAiResponse(response);
+      setLastInsight(prompt, response);
     } catch (e) {
       setAiError(e instanceof ClaudeApiError ? e.message : 'Не удалось получить ответ от ИИ');
     } finally {
       setAiLoading(false);
     }
   };
+
+  // Автоматический анализ: как только на экране появляется ключ и построенный из текущих
+  // данных промпт отличается от того, что был при последнем анализе (то есть в приложение
+  // что-то внесли), запрос к ИИ уходит сам — нажимать кнопку не нужно. Кэш показывается
+  // мгновенно, пока в фоне (если нужно) готовится обновление.
+  useEffect(() => {
+    if (!hasApiKey || aiLoading) return;
+    if (currentPrompt === lastPrompt) return;
+    runAiAnalysis(currentPrompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasApiKey, currentPrompt]);
 
   return (
     <ScreenContainer>
@@ -74,17 +93,21 @@ export function AiInsightsScreen() {
           </>
         ) : (
           <>
+            <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: spacing.sm, marginBottom: spacing.sm }}>
+              {aiLoading
+                ? 'Обновляем анализ по свежим данным…'
+                : 'Анализ обновляется автоматически при появлении новых данных.'}
+            </Text>
+            {aiError && <Text style={{ color: theme.danger, marginBottom: spacing.sm, fontSize: 13 }}>{aiError}</Text>}
+            {lastInsight && (
+              <Text style={{ color: theme.text, marginBottom: spacing.sm, lineHeight: 21 }}>{lastInsight}</Text>
+            )}
             <AppButton
-              title={aiResponse ? 'Обновить анализ' : 'Получить совет от ИИ'}
-              onPress={handleAskAi}
+              title={lastInsight ? 'Обновить сейчас' : 'Получить совет от ИИ'}
+              variant="outline"
+              onPress={() => runAiAnalysis(currentPrompt)}
               loading={aiLoading}
             />
-            {aiError && (
-              <Text style={{ color: theme.danger, marginTop: spacing.sm, fontSize: 13 }}>{aiError}</Text>
-            )}
-            {aiResponse && (
-              <Text style={{ color: theme.text, marginTop: spacing.sm, lineHeight: 21 }}>{aiResponse}</Text>
-            )}
           </>
         )}
       </Card>
