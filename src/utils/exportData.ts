@@ -47,3 +47,10 @@ export async function importJsonFile(uri: string): Promise<unknown> {
   const text = file.textSync();
   return JSON.parse(text);
 }
+
+// Читает произвольный текстовый файл (например CSV-выписку банка) как есть, без парсинга —
+// разбор формата дальше делает вызывающий код.
+export async function readTextFile(uri: string): Promise<string> {
+  const file = new File(uri);
+  return file.textSync();
+}

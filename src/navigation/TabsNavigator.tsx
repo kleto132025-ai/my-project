@@ -10,12 +10,14 @@ import { withErrorBoundary } from '../components/withErrorBoundary';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { TransactionsScreen } from '../screens/transactions/TransactionsScreen';
 import { AddTransactionScreen } from '../screens/transactions/AddTransactionScreen';
+import { BankImportScreen } from '../screens/transactions/BankImportScreen';
 import { AnalyticsScreen } from '../screens/analytics/AnalyticsScreen';
 import { BudgetScreen } from '../screens/budget/BudgetScreen';
 
 const SafeDashboardScreen = withErrorBoundary(DashboardScreen);
 const SafeTransactionsScreen = withErrorBoundary(TransactionsScreen);
 const SafeAddTransactionScreen = withErrorBoundary(AddTransactionScreen);
+const SafeBankImportScreen = withErrorBoundary(BankImportScreen);
 const SafeAnalyticsScreen = withErrorBoundary(AnalyticsScreen);
 const SafeBudgetScreen = withErrorBoundary(BudgetScreen);
 
@@ -51,6 +53,11 @@ function TransactionsStack() {
         name="AddTransaction"
         component={SafeAddTransactionScreen}
         options={{ title: 'Новая транзакция', presentation: 'modal' }}
+      />
+      <TransactionsStackNav.Screen
+        name="BankImport"
+        component={SafeBankImportScreen}
+        options={{ title: 'Импорт выписки', presentation: 'modal' }}
       />
     </TransactionsStackNav.Navigator>
   );

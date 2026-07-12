@@ -19,6 +19,7 @@ import { generateAndSharePdfReport } from '../../utils/report';
 import { reviveBackupData, countBackupEntries, type BackupData } from '../../utils/backup';
 import { filterTransactionsByPeriod, EXPORT_PERIOD_LABELS, type ExportPeriod } from '../../utils/period';
 import { fetchCbrRate, CbrApiError } from '../../utils/cbr';
+import { navigateGlobal } from '../../navigation/navigationRef';
 import type { Currency, ThemeScheme, AuthMethod } from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
@@ -308,6 +309,12 @@ export function SettingsScreen() {
         <AppButton title="Экспорт JSON (полный бэкап)" variant="outline" onPress={handleExportJson} />
         <View style={{ height: spacing.sm }} />
         <AppButton title="Импорт из файла" variant="outline" onPress={handleImport} />
+        <View style={{ height: spacing.sm }} />
+        <AppButton title="Импорт выписки банка (CSV)" variant="outline" onPress={() => navigateGlobal('BankImport')} />
+        <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: spacing.sm }}>
+          Загрузите CSV-выписку по карте/счёту из приложения банка — операции добавятся как
+          транзакции, категория подберётся автоматически по описанию операции.
+        </Text>
       </Card>
 
       <Card>
