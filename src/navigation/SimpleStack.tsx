@@ -8,6 +8,13 @@ import { HomeButton } from '../components/HomeButton';
 
 const Stack = createNativeStackNavigator();
 
+interface ExtraScreen {
+  name: string;
+  component: React.ComponentType<any>;
+  title: string;
+  presentation?: 'modal';
+}
+
 interface SimpleStackProps {
   routeName: string;
   title: string;
@@ -16,6 +23,12 @@ interface SimpleStackProps {
   /** Стартовые параметры экрана — например, чтобы один и тот же компонент открывался
    * с разным начальным состоянием из разных пунктов меню (см. "Доходы"/"Расходы"). */
   initialParams?: Record<string, unknown>;
+  /** Дополнительные экраны в том же стеке — нужно, когда основной экран сам куда-то
+   * переходит через navigation.navigate('ИмяЭкрана', ...): React Navigation ищет целевой
+   * экран только в текущем стеке и по цепочке родителей, а не у "соседних" стеков бокового
+   * меню, поэтому такой экран (например, форма добавления транзакции, открытая с "Доходы"/
+   * "Расходы", а не со вкладки "Транзакции") должен быть зарегистрирован в том же стеке. */
+  extraScreens?: ExtraScreen[];
 }
 
 export function createSimpleStack({
@@ -24,8 +37,10 @@ export function createSimpleStack({
   component,
   showDrawerToggle = true,
   initialParams,
+  extraScreens,
 }: SimpleStackProps) {
   const SafeComponent = withErrorBoundary(component);
+  const SafeExtraScreens = extraScreens?.map((s) => ({ ...s, SafeComponent: withErrorBoundary(s.component) }));
   return function Wrapped() {
     const theme = useTheme();
     return (
@@ -44,6 +59,14 @@ export function createSimpleStack({
             headerRight: () => <HomeButton />,
           }}
         />
+        {SafeExtraScreens?.map((s) => (
+          <Stack.Screen
+            key={s.name}
+            name={s.name}
+            component={s.SafeComponent}
+            options={{ title: s.title, presentation: s.presentation }}
+          />
+        ))}
       </Stack.Navigator>
     );
   };

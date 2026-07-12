@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -12,6 +11,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { useTheme } from '../../theme';
 import { spacing, radius } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
+import { navigateGlobal } from '../../navigation/navigationRef';
 import type { AppNotification, NotificationType } from '../../types';
 
 const ICONS: Record<NotificationType, React.ComponentProps<typeof Ionicons>['name']> = {
@@ -24,7 +24,6 @@ const ICONS: Record<NotificationType, React.ComponentProps<typeof Ionicons>['nam
 
 export function NotificationsScreen() {
   const theme = useTheme();
-  const navigation = useNavigation<any>();
   const notifications = useFinanceStore((s) => s.notifications);
   const markNotificationRead = useFinanceStore((s) => s.markNotificationRead);
   const markAllNotificationsRead = useFinanceStore((s) => s.markAllNotificationsRead);
@@ -33,11 +32,12 @@ export function NotificationsScreen() {
   const handlePress = (n: AppNotification) => {
     markNotificationRead(n.id);
     if (n.relatedScreen) {
-      try {
-        navigation.navigate(n.relatedScreen);
-      } catch {
-        // route may not exist from this navigator; ignore
-      }
+      // relatedScreen хранит имя нижней вкладки (например, "Budget"), которая вложена в
+      // "Tabs" на уровне бокового меню — обычный navigation.navigate(name) отсюда её не
+      // находит, так как "Уведомления" — отдельная соседняя ветка меню. Переход через
+      // глобальный navigationRef с вложенными параметрами долетает до нужной вкладки
+      // независимо от того, откуда открыт экран уведомлений.
+      navigateGlobal('Tabs', { screen: n.relatedScreen });
     }
   };
 

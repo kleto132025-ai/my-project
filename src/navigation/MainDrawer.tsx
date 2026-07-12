@@ -9,6 +9,8 @@ import { SavingsScreen } from '../screens/savings/SavingsScreen';
 import { CreditsScreen } from '../screens/credits/CreditsScreen';
 import { RegularPaymentsScreen } from '../screens/regularPayments/RegularPaymentsScreen';
 import { TransactionsScreen } from '../screens/transactions/TransactionsScreen';
+import { AddTransactionScreen } from '../screens/transactions/AddTransactionScreen';
+import { BankImportScreen } from '../screens/transactions/BankImportScreen';
 import { PeriodComparisonScreen } from '../screens/analytics/PeriodComparisonScreen';
 import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
@@ -25,18 +27,30 @@ const RegularPaymentsStack = createSimpleStack({
   component: RegularPaymentsScreen,
 });
 // Тот же экран транзакций, что и на нижней вкладке "Транзакции", но открывается сразу
-// с нужным типом — чтобы не приходилось лезть внутрь и переключать вручную.
+// с нужным типом — чтобы не приходилось лезть внутрь и переключать вручную. TransactionsScreen
+// сам вызывает navigation.navigate('AddTransaction', ...) при нажатии "+"/тапе по записи —
+// этот экран должен быть в ТОМ ЖЕ стеке, иначе получаем "The action NAVIGATE... was not handled
+// by any navigator" (React Navigation ищет экран только в текущем стеке бокового меню, а не в
+// стеке вкладки "Транзакции", даже если там такой экран есть).
+const addTransactionExtraScreen = {
+  name: 'AddTransaction',
+  component: AddTransactionScreen,
+  title: 'Новая транзакция',
+  presentation: 'modal' as const,
+};
 const IncomeStack = createSimpleStack({
   routeName: 'IncomeHome',
   title: 'Доходы',
   component: TransactionsScreen,
   initialParams: { type: 'income' },
+  extraScreens: [addTransactionExtraScreen],
 });
 const ExpenseStack = createSimpleStack({
   routeName: 'ExpenseHome',
   title: 'Расходы',
   component: TransactionsScreen,
   initialParams: { type: 'expense' },
+  extraScreens: [addTransactionExtraScreen],
 });
 const PeriodComparisonStack = createSimpleStack({
   routeName: 'PeriodComparisonHome',
@@ -51,7 +65,17 @@ const NotificationsStack = createSimpleStack({
 });
 const ProfileStack = createSimpleStack({ routeName: 'ProfileHome', title: 'Профиль', component: ProfileScreen });
 const WishlistStack = createSimpleStack({ routeName: 'WishlistHome', title: 'Хочу купить', component: WishlistScreen });
-const SettingsStack = createSimpleStack({ routeName: 'SettingsHome', title: 'Настройки', component: SettingsScreen });
+// "Импорт выписки банка" открывается тем же способом (navigateGlobal('BankImport')) из
+// экрана Настроек — тот же случай, что и с AddTransaction выше: экран должен быть в стеке
+// Настроек, иначе переход из бокового меню "Настройки" не находит его.
+const SettingsStack = createSimpleStack({
+  routeName: 'SettingsHome',
+  title: 'Настройки',
+  component: SettingsScreen,
+  extraScreens: [
+    { name: 'BankImport', component: BankImportScreen, title: 'Импорт выписки', presentation: 'modal' },
+  ],
+});
 
 export function MainDrawer() {
   const theme = useTheme();
