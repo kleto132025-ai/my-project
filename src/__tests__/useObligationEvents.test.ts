@@ -2,7 +2,7 @@ import { renderHook } from '@testing-library/react-native';
 import { useObligationEvents } from '../hooks/useFinancials';
 import { useFinanceStore } from '../store/financeStore';
 import { useSettingsStore } from '../store/settingsStore';
-import type { Credit, RegularPayment } from '../types';
+import type { Credit, InsurancePolicy, RegularPayment } from '../types';
 
 const financeInitialState = useFinanceStore.getState();
 const settingsInitialState = useSettingsStore.getState();
@@ -81,5 +81,48 @@ describe('useObligationEvents', () => {
     });
     const { result } = await renderHook(() => useObligationEvents());
     expect(result.current.get(dateKey(new Date('2026-06-15')))).toHaveLength(2);
+  });
+
+  it('clamps a day-range window to the actual number of days in the month instead of rolling into the next month', async () => {
+    jest.setSystemTime(new Date('2026-02-10')); // 2026 is not a leap year — February has 28 days
+    const payment: RegularPayment = {
+      id: 'r1', name: 'ЖКХ', amount: 4500, category: 'Жильё', dayOfMonth: 25, dayOfMonthEnd: 31, isActive: true, type: 'expense',
+    };
+    useFinanceStore.setState({ regularPayments: [payment] });
+    const { result } = await renderHook(() => useObligationEvents());
+
+    for (let day = 25; day <= 28; day++) {
+      expect(result.current.get(dateKey(new Date(2026, 1, day)))).toHaveLength(1);
+    }
+    // Would roll into March 1-3 if not clamped — must not be marked there.
+    expect(result.current.get(dateKey(new Date(2026, 2, 1)))).toBeUndefined();
+    expect(result.current.get(dateKey(new Date(2026, 2, 2)))).toBeUndefined();
+    expect(result.current.get(dateKey(new Date(2026, 2, 3)))).toBeUndefined();
+  });
+
+  it('clamps a single monthly-insurance day the same way', async () => {
+    jest.setSystemTime(new Date('2026-02-10'));
+    const policy: InsurancePolicy = {
+      id: 'p1', type: 'Жизнь', insurer: 'СОГАЗ', amount: 2000,
+      endDate: new Date('2020-01-31'), paymentFrequency: 'monthly',
+    };
+    useFinanceStore.setState({ insurancePolicies: [policy] });
+    const { result } = await renderHook(() => useObligationEvents());
+    expect(result.current.get(dateKey(new Date(2026, 1, 28)))).toHaveLength(1);
+    expect(result.current.get(dateKey(new Date(2026, 2, 3)))).toBeUndefined();
+  });
+
+  it('marks a recurring regular payment in nearby months too, not just the current one', async () => {
+    const payment: RegularPayment = {
+      id: 'r1', name: 'Интернет', amount: 800, category: 'Связь', dayOfMonth: 15, isActive: true, type: 'expense',
+    };
+    useFinanceStore.setState({ regularPayments: [payment] });
+    const { result } = await renderHook(() => useObligationEvents());
+
+    // "now" is mocked to 2026-06-10 — should also appear when the calendar is paged
+    // to May (offset -1) and July/August (offsets +1/+2), not just June.
+    expect(result.current.get(dateKey(new Date(2026, 4, 15)))).toHaveLength(1);
+    expect(result.current.get(dateKey(new Date(2026, 6, 15)))).toHaveLength(1);
+    expect(result.current.get(dateKey(new Date(2026, 7, 15)))).toHaveLength(1);
   });
 });

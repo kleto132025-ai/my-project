@@ -326,12 +326,24 @@ function obligationDateKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+// Сколько месяцев назад/вперёд от текущего показывать повторяющиеся ежемесячные события
+// (регулярные платежи, ежемесячная страховка) — календарь позволяет листать месяцы вперёд и
+// назад через MiniCalendar, и без этого окна такие события были видны только в текущем
+// календарном месяце, будто в остальные месяцы их не будет вовсе.
+const MONTH_WINDOW = [-1, 0, 1, 2];
+
 // Карта "дата → какие обязательства на неё приходятся", общая для календаря на главном экране
 // и календаря внутри "Кредиты и платежи" — раньше эта логика была продублирована прямо в
 // CreditsScreen.tsx и рисковала разойтись между двумя местами. Платежи с окном оплаты
 // (RegularPayment.dayOfMonthEnd задан, например ЖКХ — с 1 по 10 число) отмечаются на каждый
 // день окна, а не только на первый — календарь должен показывать все дни, когда платёж ещё
-// можно внести, а не только формальную "дату начала".
+// можно внести, а не только формальную "дату начала". Число месяца всегда обрезается до
+// реального количества дней в конкретном месяце (28-31) — иначе, например, "31 число" в
+// феврале молча перетекало бы на март и помечало бы чужой месяц.
 export function useObligationEvents(): Map<string, ObligationEvent[]> {
   const credits = useFinanceStore((s) => s.credits);
   const friendDebts = useFinanceStore((s) => s.friendDebts);
@@ -359,9 +371,11 @@ export function useObligationEvents(): Map<string, ObligationEvent[]> {
     friendDebts.forEach((d) => d.reminderDate && add(d.reminderDate, { label: `Долг: ${d.personName}`, amount: d.amount }));
     insurancePolicies.forEach((p) => {
       if (p.paymentFrequency === 'monthly') {
-        add(new Date(now.getFullYear(), now.getMonth(), p.endDate.getDate()), {
-          label: `Взнос по страховке: ${p.type}`,
-          amount: p.amount,
+        MONTH_WINDOW.forEach((offset) => {
+          const year = now.getFullYear();
+          const month = now.getMonth() + offset;
+          const day = Math.min(p.endDate.getDate(), daysInMonth(year, month));
+          add(new Date(year, month, day), { label: `Взнос по страховке: ${p.type}`, amount: p.amount });
         });
       } else {
         add(p.endDate, { label: `Страховка: ${p.type}`, amount: p.amount });
@@ -370,12 +384,19 @@ export function useObligationEvents(): Map<string, ObligationEvent[]> {
     regularPayments
       .filter((p) => p.isActive)
       .forEach((p) => {
-        const from = p.dayOfMonth;
-        const to = p.dayOfMonthEnd ?? p.dayOfMonth;
-        const label = p.dayOfMonthEnd ? `${p.name} (можно оплатить ${from}–${to} числа)` : p.name;
-        for (let day = from; day <= to; day++) {
-          add(new Date(now.getFullYear(), now.getMonth(), day), { label, amount: p.amount });
-        }
+        const label = p.dayOfMonthEnd
+          ? `${p.name} (можно оплатить ${p.dayOfMonth}–${p.dayOfMonthEnd} числа)`
+          : p.name;
+        MONTH_WINDOW.forEach((offset) => {
+          const year = now.getFullYear();
+          const month = now.getMonth() + offset;
+          const lastDay = daysInMonth(year, month);
+          const from = Math.min(p.dayOfMonth, lastDay);
+          const to = Math.min(p.dayOfMonthEnd ?? p.dayOfMonth, lastDay);
+          for (let day = from; day <= to; day++) {
+            add(new Date(year, month, day), { label, amount: p.amount });
+          }
+        });
       });
 
     return map;
