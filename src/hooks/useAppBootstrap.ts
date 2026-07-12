@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useFinanceStore } from '../store/financeStore';
+import { useAiStore } from '../store/aiStore';
 import { generateId } from '../utils/id';
 import { requestNotificationPermissions } from '../utils/notifications';
 
@@ -8,10 +9,12 @@ export function useAppBootstrap(): boolean {
   const loadAll = useFinanceStore((s) => s.loadAll);
   const profile = useFinanceStore((s) => s.profile);
   const saveProfile = useFinanceStore((s) => s.saveProfile);
+  const loadApiKeyStatus = useAiStore((s) => s.loadApiKeyStatus);
 
   useEffect(() => {
     (async () => {
       await loadAll();
+      await loadApiKeyStatus();
       await requestNotificationPermissions();
       setIsReady(true);
     })();

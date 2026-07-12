@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Switch, Alert, Pressable, Linking } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import Constants from 'expo-constants';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -13,6 +13,7 @@ import { spacing, radius, SCHEMES } from '../../theme';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useFinanceStore } from '../../store/financeStore';
 import { useAuthStore } from '../../store/authStore';
+import { useAiStore } from '../../store/aiStore';
 import { exportJsonFile, exportTransactionsCsv, importJsonFile } from '../../utils/exportData';
 import { generateAndSharePdfReport } from '../../utils/report';
 import type { Currency, ThemeScheme, AuthMethod } from '../../types';
@@ -26,11 +27,27 @@ export function SettingsScreen() {
   const settings = useSettingsStore();
   const financeState = useFinanceStore();
   const authStore = useAuthStore();
+  const aiStore = useAiStore();
 
   const [changingAuth, setChangingAuth] = useState(false);
   const [newMethod, setNewMethod] = useState<AuthMethod>('pin');
   const [newPin, setNewPin] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+
+  const handleSaveApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    await aiStore.setApiKey(apiKeyInput);
+    setApiKeyInput('');
+    Alert.alert('Готово', 'API-ключ сохранён на этом устройстве');
+  };
+
+  const handleClearApiKey = () => {
+    Alert.alert('Удалить API-ключ?', 'ИИ-рекомендации станут недоступны, пока не введёте ключ заново', [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Удалить', style: 'destructive', onPress: () => aiStore.clearApiKey() },
+    ]);
+  };
 
   const handleChangeAuth = async () => {
     const secret = newMethod === 'password' ? newPassword : newPin;
@@ -84,6 +101,7 @@ export function SettingsScreen() {
         onPress: async () => {
           await financeState.resetAll();
           await authStore.resetAuth();
+          await aiStore.clearApiKey();
           settings.resetOnboarding();
         },
       },
@@ -173,6 +191,38 @@ export function SettingsScreen() {
           </View>
         ) : (
           <AppButton title="Изменить способ входа" variant="outline" onPress={() => setChangingAuth(true)} />
+        )}
+      </Card>
+
+      <Card>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>ИИ-помощник</Text>
+        <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: spacing.sm }}>
+          Ключ используется в разделе «ИИ-аналитика» для настоящих ИИ-рекомендаций (вместо
+          встроенных эвристик) и хранится только на этом телефоне, в защищённом хранилище —
+          нигде больше не сохраняется.
+        </Text>
+        {aiStore.hasApiKey ? (
+          <>
+            <Text style={{ color: theme.success, fontSize: 13, marginBottom: spacing.sm }}>Ключ сохранён</Text>
+            <AppButton title="Удалить ключ" variant="outline" onPress={handleClearApiKey} />
+          </>
+        ) : (
+          <>
+            <FormInput
+              label="API-ключ Claude (Anthropic)"
+              secureTextEntry
+              value={apiKeyInput}
+              onChangeText={setApiKeyInput}
+              placeholder="sk-ant-..."
+            />
+            <AppButton title="Сохранить ключ" onPress={handleSaveApiKey} />
+            <View style={{ height: spacing.sm }} />
+            <AppButton
+              title="Получить ключ на console.anthropic.com"
+              variant="outline"
+              onPress={() => Linking.openURL('https://console.anthropic.com/settings/keys')}
+            />
+          </>
         )}
       </Card>
 

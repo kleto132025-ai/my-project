@@ -60,3 +60,52 @@ export function generateInsights(transactions: Transaction[]): Insight[] {
 
   return insights;
 }
+
+export interface FinancialSummaryInput {
+  totalIncome: number;
+  totalExpense: number;
+  currency: string;
+  topExpenseCategories: { category: string; total: number; percent: number }[];
+  budgetLimits: { category: string; limit: number; spent: number }[];
+}
+
+// Собирает компактную текстовую сводку (не сырые транзакции — только агрегированные цифры,
+// которые уже и так показываются пользователю на экранах приложения) и формирует из неё
+// промпт для реального ИИ. Вынесено в чистую функцию отдельно от сетевого вызова, чтобы
+// промпт можно было проверить тестом без обращения к API.
+export function buildFinancialSummaryPrompt(input: FinancialSummaryInput): string {
+  const { totalIncome, totalExpense, currency, topExpenseCategories, budgetLimits } = input;
+  const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : null;
+
+  const lines: string[] = [
+    'Ты — финансовый помощник в приложении для учёта личных финансов.',
+    'Вот сводка по операциям пользователя (все суммы — в его текущей валюте отображения):',
+    '',
+    `Доходы: ${totalIncome} ${currency}`,
+    `Расходы: ${totalExpense} ${currency}`,
+  ];
+  if (savingsRate !== null) lines.push(`Норма сбережений: ${savingsRate}%`);
+
+  if (topExpenseCategories.length > 0) {
+    lines.push('', 'Топ категорий расходов:');
+    for (const c of topExpenseCategories) {
+      lines.push(`- ${c.category}: ${c.total} ${currency} (${c.percent}% от расходов)`);
+    }
+  }
+
+  if (budgetLimits.length > 0) {
+    lines.push('', 'Лимиты бюджета по категориям:');
+    for (const l of budgetLimits) {
+      lines.push(`- ${l.category}: потрачено ${l.spent} из ${l.limit} ${currency}`);
+    }
+  }
+
+  lines.push(
+    '',
+    'Дай 3–4 конкретных, практичных совета на русском языке, обращаясь на "вы". Опирайся на',
+    'приведённые цифры, а не на общие фразы вроде "составьте бюджет" или "откладывайте больше".',
+    'Пиши короткими абзацами без markdown-разметки (без звёздочек, решёток, нумерованных списков).'
+  );
+
+  return lines.join('\n');
+}
