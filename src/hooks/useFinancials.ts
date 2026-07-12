@@ -316,3 +316,68 @@ export function useUpcomingPayments(days = 7): UpcomingPayment[] {
     return events.sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [credits, friendDebts, insurancePolicies, regularPayments, currency, rates, days]);
 }
+
+export interface ObligationEvent {
+  label: string;
+  amount: number;
+}
+
+function obligationDateKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+// Карта "дата → какие обязательства на неё приходятся", общая для календаря на главном экране
+// и календаря внутри "Кредиты и платежи" — раньше эта логика была продублирована прямо в
+// CreditsScreen.tsx и рисковала разойтись между двумя местами. Платежи с окном оплаты
+// (RegularPayment.dayOfMonthEnd задан, например ЖКХ — с 1 по 10 число) отмечаются на каждый
+// день окна, а не только на первый — календарь должен показывать все дни, когда платёж ещё
+// можно внести, а не только формальную "дату начала".
+export function useObligationEvents(): Map<string, ObligationEvent[]> {
+  const credits = useFinanceStore((s) => s.credits);
+  const friendDebts = useFinanceStore((s) => s.friendDebts);
+  const insurancePolicies = useFinanceStore((s) => s.insurancePolicies);
+  const regularPayments = useFinanceStore((s) => s.regularPayments);
+  const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
+
+  return useMemo(() => {
+    const map = new Map<string, ObligationEvent[]>();
+    const add = (d: Date, event: ObligationEvent) => {
+      const k = obligationDateKey(d);
+      const list = map.get(k);
+      if (list) list.push(event);
+      else map.set(k, [event]);
+    };
+    const now = new Date();
+
+    credits.forEach((c) =>
+      add(c.nextPaymentDate, {
+        label: `${c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'} «${c.name}»`,
+        amount: convertAmount(c.monthlyPayment, c.currency, currency, rates),
+      })
+    );
+    friendDebts.forEach((d) => d.reminderDate && add(d.reminderDate, { label: `Долг: ${d.personName}`, amount: d.amount }));
+    insurancePolicies.forEach((p) => {
+      if (p.paymentFrequency === 'monthly') {
+        add(new Date(now.getFullYear(), now.getMonth(), p.endDate.getDate()), {
+          label: `Взнос по страховке: ${p.type}`,
+          amount: p.amount,
+        });
+      } else {
+        add(p.endDate, { label: `Страховка: ${p.type}`, amount: p.amount });
+      }
+    });
+    regularPayments
+      .filter((p) => p.isActive)
+      .forEach((p) => {
+        const from = p.dayOfMonth;
+        const to = p.dayOfMonthEnd ?? p.dayOfMonth;
+        const label = p.dayOfMonthEnd ? `${p.name} (можно оплатить ${from}–${to} числа)` : p.name;
+        for (let day = from; day <= to; day++) {
+          add(new Date(now.getFullYear(), now.getMonth(), day), { label, amount: p.amount });
+        }
+      });
+
+    return map;
+  }, [credits, friendDebts, insurancePolicies, regularPayments, currency, rates]);
+}

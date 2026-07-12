@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import type { InsurancePolicy } from '../types';
+import type { InsurancePolicy, RegularPayment } from '../types';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -67,6 +67,26 @@ export async function scheduleInsuranceReminder(policy: InsurancePolicy): Promis
       type: Notifications.SchedulableTriggerInputTypes.YEARLY,
       day: reminderDate.getDate(),
       month: reminderDate.getMonth(),
+      hour: 10,
+      minute: 0,
+    },
+  });
+}
+
+// Регулярный платёж (ЖКХ, интернет, детский сад, курсы и т.п.) напоминается ежемесячно —
+// повторяющийся триггер, а не разовый, чтобы не пропасть после первого же месяца. Для платежей
+// с окном оплаты (dayOfMonthEnd задан, например ЖКХ — с 1 по 10 число) напоминание приходит в
+// начале окна и в тексте указывается весь диапазон, а не только одна дата, чтобы не создавалось
+// впечатление, что оплатить нужно строго сегодня.
+export async function scheduleRegularPaymentReminder(payment: RegularPayment): Promise<void> {
+  const body = payment.dayOfMonthEnd
+    ? `${payment.name} — можно оплатить с ${payment.dayOfMonth} по ${payment.dayOfMonthEnd} число`
+    : `${payment.name} — не забудьте оплатить`;
+  await Notifications.scheduleNotificationAsync({
+    content: { title: 'Регулярный платёж', body },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
+      day: payment.dayOfMonth,
       hour: 10,
       minute: 0,
     },

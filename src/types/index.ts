@@ -80,7 +80,12 @@ export interface RegularPayment {
   name: string;
   amount: number;
   category: string;
+  /** День оплаты — для платежей с фиксированной датой (интернет) единственная дата;
+   * для платежей с окном оплаты (например ЖКХ — с 1 по 10 число) начало окна. */
   dayOfMonth: number;
+  /** Если задано — платёж можно вносить в любой день от `dayOfMonth` до этого числа
+   * включительно (окно оплаты), а не строго в один день. */
+  dayOfMonthEnd?: number;
   isActive: boolean;
   type: TransactionType;
 }

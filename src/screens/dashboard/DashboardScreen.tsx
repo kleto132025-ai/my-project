@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenContainer } from '../../components/ScreenContainer';
@@ -6,6 +6,7 @@ import { Card } from '../../components/Card';
 import { ProgressBar } from '../../components/ProgressBar';
 import { TransactionRow } from '../../components/TransactionRow';
 import { EmptyState } from '../../components/EmptyState';
+import { MiniCalendar } from '../../components/MiniCalendar';
 import { useTheme } from '../../theme';
 import { spacing } from '../../theme';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -22,6 +23,7 @@ import {
   useNetWorth,
   useMortgageAssets,
   useUpcomingPayments,
+  useObligationEvents,
 } from '../../hooks/useFinancials';
 import type { Transaction } from '../../types';
 
@@ -44,6 +46,11 @@ export function DashboardScreen() {
   const netWorth = useNetWorth();
   const mortgageAssets = useMortgageAssets();
   const upcomingPayments = useUpcomingPayments(7);
+  const eventsByDate = useObligationEvents();
+  const markedDates = useMemo(() => new Set(eventsByDate.keys()), [eventsByDate]);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const selectedDateEvents = selectedDate ? eventsByDate.get(dateKey(selectedDate)) ?? [] : [];
 
   const isNegative = freeFunds < 0;
 
@@ -124,6 +131,36 @@ export function DashboardScreen() {
               <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(p.amount, currency)}</Text>
             </View>
           ))}
+        </Card>
+      )}
+
+      {markedDates.size > 0 && (
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Календарь обязательств</Text>
+          <MiniCalendar markedDates={markedDates} onDayPress={setSelectedDate} />
+          <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: spacing.sm }}>
+            Отмечены даты платежей по кредитам, регулярным платежам, долгам и страховкам.
+            Нажмите на дату, чтобы увидеть, какой платёж на неё приходится.
+          </Text>
+          {selectedDate && (
+            <View style={[styles.calendarFootnote, { borderTopColor: theme.border }]}>
+              <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
+                {selectedDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </Text>
+              {selectedDateEvents.length === 0 ? (
+                <Text style={{ color: theme.textMuted, fontSize: 12 }}>На эту дату платежей не запланировано</Text>
+              ) : (
+                selectedDateEvents.map((event, i) => (
+                  <View key={i} style={styles.debtRow}>
+                    <Text style={{ color: theme.textMuted, fontSize: 12, flexShrink: 1 }}>{event.label}</Text>
+                    <Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>
+                      {formatCurrency(event.amount, currency)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
         </Card>
       )}
 
@@ -315,4 +352,5 @@ const styles = StyleSheet.create({
   upcomingLabelRow: { gap: 2 },
   debtTotalRow: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 4, paddingTop: spacing.sm },
   mortgageAssetBlock: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.sm, paddingTop: spacing.sm },
+  calendarFootnote: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth },
 });

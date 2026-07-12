@@ -7,6 +7,7 @@ import { createSimpleStack } from './SimpleStack';
 import { ExtraFeaturesStack } from './ExtraFeaturesStack';
 import { SavingsScreen } from '../screens/savings/SavingsScreen';
 import { CreditsScreen } from '../screens/credits/CreditsScreen';
+import { RegularPaymentsScreen } from '../screens/regularPayments/RegularPaymentsScreen';
 import { TransactionsScreen } from '../screens/transactions/TransactionsScreen';
 import { PeriodComparisonScreen } from '../screens/analytics/PeriodComparisonScreen';
 import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
@@ -18,6 +19,11 @@ const Drawer = createDrawerNavigator();
 
 const SavingsStack = createSimpleStack({ routeName: 'SavingsHome', title: 'Накопления', component: SavingsScreen });
 const CreditsStack = createSimpleStack({ routeName: 'CreditsHome', title: 'Кредиты и платежи', component: CreditsScreen });
+const RegularPaymentsStack = createSimpleStack({
+  routeName: 'RegularPaymentsHome',
+  title: 'Регулярные платежи',
+  component: RegularPaymentsScreen,
+});
 // Тот же экран транзакций, что и на нижней вкладке "Транзакции", но открывается сразу
 // с нужным типом — чтобы не приходилось лезть внутрь и переключать вручную.
 const IncomeStack = createSimpleStack({
@@ -86,6 +92,11 @@ export function MainDrawer() {
         name="Credits"
         component={CreditsStack}
         options={{ title: 'Кредиты и платежи', drawerIcon: ({ color, size }) => <Ionicons name="card-outline" size={size} color={color} /> }}
+      />
+      <Drawer.Screen
+        name="RegularPayments"
+        component={RegularPaymentsStack}
+        options={{ title: 'Регулярные платежи', drawerIcon: ({ color, size }) => <Ionicons name="repeat-outline" size={size} color={color} /> }}
       />
       <Drawer.Screen
         name="PeriodComparison"

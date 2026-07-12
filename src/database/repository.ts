@@ -229,11 +229,11 @@ export async function listRegularPayments(): Promise<RegularPayment[]> {
 export async function upsertRegularPayment(p: RegularPayment): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO regular_payments (id, name, amount, category, dayOfMonth, isActive, type)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO regular_payments (id, name, amount, category, dayOfMonth, dayOfMonthEnd, isActive, type)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name, amount=excluded.amount, category=excluded.category,
-       dayOfMonth=excluded.dayOfMonth, isActive=excluded.isActive, type=excluded.type;`,
-    [p.id, p.name, p.amount, p.category, p.dayOfMonth, p.isActive ? 1 : 0, p.type]
+       dayOfMonth=excluded.dayOfMonth, dayOfMonthEnd=excluded.dayOfMonthEnd, isActive=excluded.isActive, type=excluded.type;`,
+    [p.id, p.name, p.amount, p.category, p.dayOfMonth, p.dayOfMonthEnd ?? null, p.isActive ? 1 : 0, p.type]
   );
 }
 

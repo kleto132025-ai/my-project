@@ -23,6 +23,7 @@ const MIGRATION_STATEMENTS = [
   "ALTER TABLE investments ADD COLUMN currency TEXT NOT NULL DEFAULT 'RUB';",
   "ALTER TABLE savings_accounts ADD COLUMN currency TEXT NOT NULL DEFAULT 'RUB';",
   'ALTER TABLE investments ADD COLUMN moexTicker TEXT;',
+  'ALTER TABLE regular_payments ADD COLUMN dayOfMonthEnd INTEGER;',
 ];
 
 async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

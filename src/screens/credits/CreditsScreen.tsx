@@ -22,6 +22,7 @@ import {
   simulateAmortization,
 } from '../../utils/calculations';
 import { schedulePaymentReminders, scheduleInsuranceReminder, requestNotificationPermissions } from '../../utils/notifications';
+import { useObligationEvents } from '../../hooks/useFinancials';
 import { confirmDelete } from '../../utils/confirm';
 import type {
   DebtStatus,
@@ -59,7 +60,6 @@ export function CreditsScreen() {
 
   const allCredits = useFinanceStore((s) => s.credits);
   const creditRepayments = useFinanceStore((s) => s.creditRepayments);
-  const regularPayments = useFinanceStore((s) => s.regularPayments);
   const friendDebts = useFinanceStore((s) => s.friendDebts);
   const insurancePolicies = useFinanceStore((s) => s.insurancePolicies);
   const saveCredit = useFinanceStore((s) => s.saveCredit);
@@ -298,40 +298,9 @@ export function CreditsScreen() {
 
   const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
-  const eventsByDate = useMemo(() => {
-    const map = new Map<string, { label: string; amount: number }[]>();
-    const add = (d: Date, event: { label: string; amount: number }) => {
-      const k = dateKey(d);
-      const list = map.get(k);
-      if (list) list.push(event);
-      else map.set(k, [event]);
-    };
-    allCredits.forEach((c) =>
-      add(c.nextPaymentDate, {
-        label: `${c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'} «${c.name}»`,
-        amount: convertAmount(c.monthlyPayment, c.currency, currency, rates),
-      })
-    );
-    friendDebts.forEach((d) => d.reminderDate && add(d.reminderDate, { label: `Долг: ${d.personName}`, amount: d.amount }));
-    const now = new Date();
-    insurancePolicies.forEach((p) => {
-      if (p.paymentFrequency === 'monthly') {
-        // Ежемесячный взнос — отмечаем ближайшее в этом месяце число оплаты, а не дату
-        // окончания договора (которая может быть через несколько лет).
-        add(new Date(now.getFullYear(), now.getMonth(), p.endDate.getDate()), {
-          label: `Взнос по страховке: ${p.type}`,
-          amount: p.amount,
-        });
-      } else {
-        add(p.endDate, { label: `Страховка: ${p.type}`, amount: p.amount });
-      }
-    });
-    regularPayments
-      .filter((p) => p.isActive)
-      .forEach((p) => add(new Date(now.getFullYear(), now.getMonth(), p.dayOfMonth), { label: p.name, amount: p.amount }));
-    return map;
-  }, [allCredits, friendDebts, insurancePolicies, regularPayments, currency, rates]);
-
+  // Общий источник событий для календаря — тот же хук, что использует и календарь на главном
+  // экране, чтобы не разойтись в двух местах.
+  const eventsByDate = useObligationEvents();
   const markedDates = useMemo(() => new Set(eventsByDate.keys()), [eventsByDate]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const selectedDateEvents = selectedDate ? eventsByDate.get(dateKey(selectedDate)) ?? [] : [];

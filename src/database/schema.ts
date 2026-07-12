@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS regular_payments (
   amount REAL NOT NULL,
   category TEXT NOT NULL,
   dayOfMonth INTEGER NOT NULL,
+  dayOfMonthEnd INTEGER,
   isActive INTEGER NOT NULL DEFAULT 1,
   type TEXT NOT NULL
 );
