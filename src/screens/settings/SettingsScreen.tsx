@@ -17,8 +17,11 @@ import { useAiStore } from '../../store/aiStore';
 import { exportJsonFile, exportTransactionsCsv, importJsonFile } from '../../utils/exportData';
 import { generateAndSharePdfReport } from '../../utils/report';
 import { reviveBackupData, countBackupEntries, type BackupData } from '../../utils/backup';
+import { filterTransactionsByPeriod, EXPORT_PERIOD_LABELS, type ExportPeriod } from '../../utils/period';
 import type { Currency, ThemeScheme, AuthMethod } from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
+
+const EXPORT_PERIODS: ExportPeriod[] = ['all', 'this_month', 'last_month', 'this_year'];
 
 const CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR'];
 const SCHEME_LABELS: Record<ThemeScheme, string> = { blue: 'Синяя', maroon: 'Бордовая', green: 'Зелёная', purple: 'Фиолетовая' };
@@ -35,6 +38,7 @@ export function SettingsScreen() {
   const [newPin, setNewPin] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [exportPeriod, setExportPeriod] = useState<ExportPeriod>('all');
 
   const handleSaveApiKey = async () => {
     if (!apiKeyInput.trim()) return;
@@ -89,11 +93,16 @@ export function SettingsScreen() {
   };
 
   const handleExportCsv = async () => {
-    await exportTransactionsCsv(financeState.transactions);
+    await exportTransactionsCsv(filterTransactionsByPeriod(financeState.transactions, exportPeriod));
   };
 
   const handleExportPdf = async () => {
-    await generateAndSharePdfReport('Полный отчёт', financeState.transactions, settings.currency, settings.exchangeRates);
+    await generateAndSharePdfReport(
+      `Отчёт: ${EXPORT_PERIOD_LABELS[exportPeriod]}`,
+      filterTransactionsByPeriod(financeState.transactions, exportPeriod),
+      settings.currency,
+      settings.exchangeRates
+    );
   };
 
   const handleImport = async () => {
@@ -250,11 +259,20 @@ export function SettingsScreen() {
 
       <Card>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>Экспорт и импорт</Text>
+        <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+          Период для CSV и PDF (транзакции за выбранный период; JSON — всегда полный бэкап)
+        </Text>
+        <SegmentedControl
+          value={exportPeriod}
+          onChange={setExportPeriod}
+          options={EXPORT_PERIODS.map((p) => ({ label: EXPORT_PERIOD_LABELS[p], value: p }))}
+        />
+        <View style={{ height: spacing.sm }} />
         <AppButton title="Экспорт CSV" variant="outline" onPress={handleExportCsv} />
         <View style={{ height: spacing.sm }} />
-        <AppButton title="Экспорт JSON" variant="outline" onPress={handleExportJson} />
-        <View style={{ height: spacing.sm }} />
         <AppButton title="Экспорт PDF" variant="outline" onPress={handleExportPdf} />
+        <View style={{ height: spacing.sm }} />
+        <AppButton title="Экспорт JSON (полный бэкап)" variant="outline" onPress={handleExportJson} />
         <View style={{ height: spacing.sm }} />
         <AppButton title="Импорт из файла" variant="outline" onPress={handleImport} />
       </Card>
