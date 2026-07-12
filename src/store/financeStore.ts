@@ -25,6 +25,7 @@ import * as repo from '../database/repository';
 import { seedDemoDataIfNeeded, SEED_FLAG_KEY } from '../database/seed';
 import { setMeta } from '../database/client';
 import { calculateGoalProgress, calculateAmortizationStep, calculateMonthlyInterest, monthsElapsed } from '../utils/calculations';
+import type { BackupData } from '../utils/backup';
 
 interface FinanceState {
   isLoaded: boolean;
@@ -126,6 +127,13 @@ interface FinanceState {
   saveProfile: (p: UserProfile) => Promise<void>;
 
   resetAll: () => Promise<void>;
+
+  /**
+   * Записывает данные из распакованного JSON-бэкапа (см. utils/backup.ts) в базу и
+   * перезагружает состояние из неё. Записи с уже существующим id обновляются, остальные —
+   * добавляются, так что импорт можно безопасно повторять (не плодит дубликаты).
+   */
+  importBackup: (data: BackupData) => Promise<void>;
 
   checkAndUnlockAchievements: () => Promise<void>;
 }
@@ -582,6 +590,60 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       notifications: [], cashbackCards: [], achievements: [], recurringTemplates: [], profile: null,
       isLoaded: false,
     });
+  },
+
+  importBackup: async (data) => {
+    // Записи бэкапа приходят с уже существующими id (это те же id, что были в БД на момент
+    // экспорта). Часть таблиц не имеет upsert-обёртки (только insert/update отдельно) — для них
+    // сначала пробуем insert, а если id уже занят (UNIQUE constraint), откатываемся на update.
+    const insertOrUpdate = async <T extends { id: string }>(
+      items: T[] | undefined,
+      insert: (item: T) => Promise<void>,
+      update: (item: T) => Promise<void>
+    ) => {
+      if (!items) return;
+      for (const item of items) {
+        try {
+          await insert(item);
+        } catch {
+          await update(item);
+        }
+      }
+    };
+
+    if (data.transactions) await insertOrUpdate(data.transactions, repo.insertTransaction, repo.updateTransaction);
+    if (data.goals) for (const g of data.goals) await repo.upsertGoal(g);
+    if (data.credits) for (const c of data.credits) await repo.upsertCredit(c);
+    if (data.creditRepayments) {
+      await insertOrUpdate(data.creditRepayments, repo.insertCreditRepayment, repo.updateCreditRepayment);
+    }
+    if (data.budgetLimits) for (const b of data.budgetLimits) await repo.upsertBudgetLimit(b);
+    if (data.regularPayments) for (const p of data.regularPayments) await repo.upsertRegularPayment(p);
+    if (data.deposits) for (const d of data.deposits) await repo.upsertDeposit(d);
+    if (data.savingsAccounts) for (const a of data.savingsAccounts) await repo.upsertSavingsAccount(a);
+    if (data.savingsAccruals) {
+      // Начисления не редактируются после создания — при совпадении id повторную запись просто пропускаем.
+      for (const a of data.savingsAccruals) {
+        try {
+          await repo.insertSavingsAccrual(a);
+        } catch {
+          // уже импортировано ранее — пропускаем
+        }
+      }
+    }
+    if (data.investments) for (const i of data.investments) await repo.upsertInvestment(i);
+    if (data.investmentPayouts) {
+      await insertOrUpdate(data.investmentPayouts, repo.insertInvestmentPayout, repo.updateInvestmentPayout);
+    }
+    if (data.friendDebts) for (const d of data.friendDebts) await repo.upsertFriendDebt(d);
+    if (data.insurancePolicies) for (const p of data.insurancePolicies) await repo.upsertInsurancePolicy(p);
+    if (data.wishlistItems) for (const w of data.wishlistItems) await repo.upsertWishlistItem(w);
+    if (data.cashbackCards) for (const c of data.cashbackCards) await repo.upsertCashbackCard(c);
+    if (data.achievements) for (const a of data.achievements) await repo.upsertAchievement(a);
+    if (data.recurringTemplates) for (const t of data.recurringTemplates) await repo.upsertRecurringTemplate(t);
+    if (data.profile) await repo.upsertUserProfile(data.profile);
+
+    await get().loadAll();
   },
 
   checkAndUnlockAchievements: async () => {

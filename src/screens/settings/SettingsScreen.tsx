@@ -16,6 +16,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useAiStore } from '../../store/aiStore';
 import { exportJsonFile, exportTransactionsCsv, importJsonFile } from '../../utils/exportData';
 import { generateAndSharePdfReport } from '../../utils/report';
+import { reviveBackupData, countBackupEntries, type BackupData } from '../../utils/backup';
 import type { Currency, ThemeScheme, AuthMethod } from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
@@ -63,12 +64,27 @@ export function SettingsScreen() {
   };
 
   const handleExportJson = async () => {
-    await exportJsonFile('finance-export.json', {
+    const backup: BackupData = {
       transactions: financeState.transactions,
       goals: financeState.goals,
       credits: financeState.credits,
+      creditRepayments: financeState.creditRepayments,
       budgetLimits: financeState.budgetLimits,
-    });
+      regularPayments: financeState.regularPayments,
+      deposits: financeState.deposits,
+      savingsAccounts: financeState.savingsAccounts,
+      savingsAccruals: financeState.savingsAccruals,
+      investments: financeState.investments,
+      investmentPayouts: financeState.investmentPayouts,
+      friendDebts: financeState.friendDebts,
+      insurancePolicies: financeState.insurancePolicies,
+      wishlistItems: financeState.wishlistItems,
+      cashbackCards: financeState.cashbackCards,
+      achievements: financeState.achievements,
+      recurringTemplates: financeState.recurringTemplates,
+      profile: financeState.profile ?? undefined,
+    };
+    await exportJsonFile('finance-export.json', backup);
   };
 
   const handleExportCsv = async () => {
@@ -83,10 +99,15 @@ export function SettingsScreen() {
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
       if (result.canceled) return;
-      const data = await importJsonFile(result.assets[0].uri);
-      if (typeof data === 'object' && data !== null) {
-        Alert.alert('Импорт завершён', 'Файл прочитан. Импорт транзакций будет применён при следующей синхронизации.');
+      const raw = await importJsonFile(result.assets[0].uri);
+      const data = reviveBackupData(raw);
+      const count = countBackupEntries(data);
+      if (count === 0) {
+        Alert.alert('Не удалось импортировать', 'В файле не найдено ни одной распознанной записи');
+        return;
       }
+      await financeState.importBackup(data);
+      Alert.alert('Импорт завершён', `Импортировано записей: ${count}`);
     } catch {
       Alert.alert('Не удалось импортировать', 'Проверьте формат файла');
     }
