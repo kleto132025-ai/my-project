@@ -17,6 +17,7 @@ const MIGRATION_STATEMENTS = [
   'ALTER TABLE credits ADD COLUMN currentValue REAL;',
   'ALTER TABLE credits ADD COLUMN renovationCosts REAL;',
   'ALTER TABLE insurance_policies ADD COLUMN creditId TEXT;',
+  "ALTER TABLE insurance_policies ADD COLUMN paymentFrequency TEXT NOT NULL DEFAULT 'annual';",
 ];
 
 async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

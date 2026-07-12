@@ -19,6 +19,7 @@ import {
   useBudgetLimitsWithSpent,
   useDebtSummary,
   useInvestmentsSummary,
+  useNetWorth,
 } from '../../hooks/useFinancials';
 import type { Transaction } from '../../types';
 
@@ -38,6 +39,7 @@ export function DashboardScreen() {
   const forecast = useForecast(1);
   const debtSummary = useDebtSummary();
   const investmentsSummary = useInvestmentsSummary();
+  const netWorth = useNetWorth();
 
   const isNegative = freeFunds < 0;
 
@@ -56,6 +58,34 @@ export function DashboardScreen() {
         ) : (
           <Text style={styles.balanceHint}>Доходы − Расходы</Text>
         )}
+      </Card>
+
+      <Card>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>Общий капитал</Text>
+        <Text style={{ color: netWorth.total >= 0 ? theme.success : theme.danger, fontSize: 22, fontWeight: '800' }}>
+          {formatCurrency(netWorth.total, currency)}
+        </Text>
+        <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2, marginBottom: spacing.sm }}>
+          Остаток ДС + накопления + инвестиции + цели + капитал по ипотеке − остаток по кредитам
+        </Text>
+        <View style={styles.debtRow}>
+          <Text style={{ color: theme.text }}>Остаток ДС</Text>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(netWorth.cash, currency)}</Text>
+        </View>
+        <View style={styles.debtRow}>
+          <Text style={{ color: theme.text }}>Накопительные счета</Text>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>
+            {formatCurrency(netWorth.savingsAccounts, currency)}
+          </Text>
+        </View>
+        <View style={styles.debtRow}>
+          <Text style={{ color: theme.text }}>Вклады</Text>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(netWorth.deposits, currency)}</Text>
+        </View>
+        <View style={styles.debtRow}>
+          <Text style={{ color: theme.text }}>Инвестиции</Text>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(netWorth.investments, currency)}</Text>
+        </View>
       </Card>
 
       <Card>

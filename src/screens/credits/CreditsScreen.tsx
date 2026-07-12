@@ -16,9 +16,17 @@ import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateAmortizationStep, calculateMonthlyPayment } from '../../utils/calculations';
-import { schedulePaymentReminders, scheduleReminder, requestNotificationPermissions } from '../../utils/notifications';
+import { schedulePaymentReminders, scheduleInsuranceReminder, requestNotificationPermissions } from '../../utils/notifications';
 import { confirmDelete } from '../../utils/confirm';
-import type { DebtStatus, Credit, CreditKind, CreditRepayment, FriendDebt, InsurancePolicy } from '../../types';
+import type {
+  DebtStatus,
+  Credit,
+  CreditKind,
+  CreditRepayment,
+  FriendDebt,
+  InsurancePolicy,
+  InsurancePaymentFrequency,
+} from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'credits' | 'mortgage' | 'calendar' | 'debts' | 'insurance';
@@ -70,6 +78,7 @@ export function CreditsScreen() {
   const [insuranceType, setInsuranceType] = useState('');
   const [insurer, setInsurer] = useState('');
   const [endDate, setEndDate] = useState(new Date(Date.now() + 90 * 24 * 3600 * 1000));
+  const [insurancePaymentFrequency, setInsurancePaymentFrequency] = useState<InsurancePaymentFrequency>('annual');
   const [earlyRepayAmount, setEarlyRepayAmount] = useState('');
   const [repayDate, setRepayDate] = useState(new Date());
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -94,6 +103,7 @@ export function CreditsScreen() {
     setCurrentValue('');
     setRenovationCosts('');
     setInsuranceCreditId('');
+    setInsurancePaymentFrequency('annual');
     setPersonName('');
     setInsuranceType('');
     setInsurer('');
@@ -134,6 +144,7 @@ export function CreditsScreen() {
     setAmount(String(p.amount));
     setEndDate(p.endDate);
     setInsuranceCreditId(p.creditId ?? '');
+    setInsurancePaymentFrequency(p.paymentFrequency);
     setEditingId(p.id);
     setShowForm(true);
   };
@@ -237,21 +248,19 @@ export function CreditsScreen() {
 
   const handleAddInsurance = async () => {
     if (!insuranceType.trim() || !insurer.trim() || !amount) return;
-    await saveInsurancePolicy({
+    const policy: InsurancePolicy = {
       ...(editingId ? { id: editingId } : {}),
       type: insuranceType.trim(),
       insurer: insurer.trim(),
       amount: parseLocaleNumber(amount),
       endDate,
       creditId: insuranceCreditId || undefined,
-    } as InsurancePolicy);
+      paymentFrequency: insurancePaymentFrequency,
+    } as InsurancePolicy;
+    await saveInsurancePolicy(policy);
     if (!editingId) {
       const granted = await requestNotificationPermissions();
-      if (granted) {
-        const reminderAt = new Date(endDate);
-        reminderAt.setDate(reminderAt.getDate() - 30);
-        await scheduleReminder('Страховка скоро истекает', `${insuranceType.trim()} — окончание через 30 дней`, reminderAt);
-      }
+      if (granted) await scheduleInsuranceReminder(policy);
     }
     resetForm();
   };
@@ -273,8 +282,19 @@ export function CreditsScreen() {
       })
     );
     friendDebts.forEach((d) => d.reminderDate && add(d.reminderDate, { label: `Долг: ${d.personName}`, amount: d.amount }));
-    insurancePolicies.forEach((p) => add(p.endDate, { label: `Страховка: ${p.type}`, amount: p.amount }));
     const now = new Date();
+    insurancePolicies.forEach((p) => {
+      if (p.paymentFrequency === 'monthly') {
+        // Ежемесячный взнос — отмечаем ближайшее в этом месяце число оплаты, а не дату
+        // окончания договора (которая может быть через несколько лет).
+        add(new Date(now.getFullYear(), now.getMonth(), p.endDate.getDate()), {
+          label: `Взнос по страховке: ${p.type}`,
+          amount: p.amount,
+        });
+      } else {
+        add(p.endDate, { label: `Страховка: ${p.type}`, amount: p.amount });
+      }
+    });
     regularPayments
       .filter((p) => p.isActive)
       .forEach((p) => add(new Date(now.getFullYear(), now.getMonth(), p.dayOfMonth), { label: p.name, amount: p.amount }));
@@ -702,7 +722,10 @@ export function CreditsScreen() {
                     <CardActions onEdit={() => startEditInsurance(p)} onDelete={() => confirmDelete(p.type, () => removeInsurancePolicy(p.id))} />
                   </View>
                 </View>
-                <Text style={{ color: theme.textMuted, marginTop: 4 }}>{formatCurrency(p.amount, currency)}</Text>
+                <Text style={{ color: theme.textMuted, marginTop: 4 }}>
+                  {formatCurrency(p.amount, currency)}
+                  {p.paymentFrequency === 'monthly' ? ' · взнос ежемесячно' : ' · взнос ежегодно'}
+                </Text>
                 <Text style={{ color: theme.textMuted, fontSize: 12 }}>
                   Окончание: {p.endDate.toLocaleDateString('ru-RU')}
                 </Text>
@@ -720,6 +743,15 @@ export function CreditsScreen() {
               <FormInput label="Страховщик" value={insurer} onChangeText={setInsurer} />
               <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               <DateField label="Дата окончания" value={endDate} onChange={setEndDate} />
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>Как часто вносится взнос</Text>
+              <SegmentedControl
+                value={insurancePaymentFrequency}
+                onChange={setInsurancePaymentFrequency}
+                options={[
+                  { label: 'Ежегодно', value: 'annual' },
+                  { label: 'Ежемесячно', value: 'monthly' },
+                ]}
+              />
               {mortgages.length > 0 && (
                 <>
                   <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>

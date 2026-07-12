@@ -143,6 +143,8 @@ export interface FriendDebt {
   reminderDate?: Date;
 }
 
+export type InsurancePaymentFrequency = 'monthly' | 'annual';
+
 export interface InsurancePolicy {
   id: string;
   type: string;
@@ -151,6 +153,12 @@ export interface InsurancePolicy {
   endDate: Date;
   /** Если полис оформлен по конкретному кредиту/ипотеке (страхование жизни/объекта) — id кредита. */
   creditId?: string;
+  /**
+   * Как часто вносится взнос: ежемесячно (например, ипотечное страхование, чтобы банк не
+   * поднял ставку) или ежегодно (например, ОСАГО/КАСКО) — определяет, как планируется
+   * напоминание: ежемесячно повторяющееся или ежегодно за 30 дней до endDate.
+   */
+  paymentFrequency: InsurancePaymentFrequency;
 }
 
 export type WishStatus = 'postponed' | 'buying_soon' | 'fulfilled';

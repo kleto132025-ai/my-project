@@ -133,7 +133,8 @@ CREATE TABLE IF NOT EXISTS insurance_policies (
   insurer TEXT NOT NULL,
   amount REAL NOT NULL,
   endDate TEXT NOT NULL,
-  creditId TEXT
+  creditId TEXT,
+  paymentFrequency TEXT NOT NULL DEFAULT 'annual'
 );
 
 CREATE TABLE IF NOT EXISTS wishlist_items (

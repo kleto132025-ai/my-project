@@ -145,6 +145,7 @@ export async function seedDemoDataIfNeeded(): Promise<void> {
     insurer: 'Ингосстрах',
     amount: 8500,
     endDate: daysFromNow(90),
+    paymentFrequency: 'annual',
   });
 
   // 2 вклада

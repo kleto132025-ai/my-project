@@ -413,11 +413,12 @@ export async function listInsurancePolicies(): Promise<InsurancePolicy[]> {
 export async function upsertInsurancePolicy(p: InsurancePolicy): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO insurance_policies (id, type, insurer, amount, endDate, creditId)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO insurance_policies (id, type, insurer, amount, endDate, creditId, paymentFrequency)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET type=excluded.type, insurer=excluded.insurer,
-       amount=excluded.amount, endDate=excluded.endDate, creditId=excluded.creditId;`,
-    [p.id, p.type, p.insurer, p.amount, p.endDate.toISOString(), p.creditId ?? null]
+       amount=excluded.amount, endDate=excluded.endDate, creditId=excluded.creditId,
+       paymentFrequency=excluded.paymentFrequency;`,
+    [p.id, p.type, p.insurer, p.amount, p.endDate.toISOString(), p.creditId ?? null, p.paymentFrequency]
   );
 }
 

@@ -118,3 +118,56 @@ export function useInvestmentsSummary(): InvestmentsSummary {
     return { totalValue, totalPayouts };
   }, [investments, investmentPayouts]);
 }
+
+export interface NetWorth {
+  /** Остаток ДС по текущим счетам (доходы минус расходы по всем транзакциям). */
+  cash: number;
+  savingsAccounts: number;
+  deposits: number;
+  investments: number;
+  /** Собственный капитал по ипотекам: (текущая стоимость − остаток долга), либо просто
+   *  −остаток, если текущая стоимость объекта не указана — тогда актив не оценён и в
+   *  капитал не добавляется, но долг по нему всё равно учитывается. */
+  mortgageEquity: number;
+  /** Остаток долга по обычным кредитам (не ипотекам). */
+  creditDebt: number;
+  goalsSaved: number;
+  total: number;
+}
+
+export function useNetWorth(): NetWorth {
+  const cash = useFreeFunds();
+  const investmentsSummary = useInvestmentsSummary();
+  const savingsAccountsList = useFinanceStore((s) => s.savingsAccounts);
+  const deposits = useFinanceStore((s) => s.deposits);
+  const goals = useFinanceStore((s) => s.goals);
+  const credits = useFinanceStore((s) => s.credits);
+
+  return useMemo(() => {
+    const savingsAccountsTotal = savingsAccountsList.reduce((sum, a) => sum + a.balance, 0);
+    const depositsTotal = deposits.reduce((sum, d) => sum + d.amount, 0);
+    const goalsSaved = goals.reduce((sum, g) => sum + g.savedAmount, 0);
+    const mortgageEquity = credits
+      .filter((c) => c.kind === 'mortgage')
+      .reduce((sum, c) => sum + (c.currentValue != null ? c.currentValue - c.remaining : -c.remaining), 0);
+    const creditDebt = credits.filter((c) => c.kind === 'credit').reduce((sum, c) => sum + c.remaining, 0);
+    const total =
+      cash +
+      savingsAccountsTotal +
+      depositsTotal +
+      investmentsSummary.totalValue +
+      goalsSaved +
+      mortgageEquity -
+      creditDebt;
+    return {
+      cash,
+      savingsAccounts: savingsAccountsTotal,
+      deposits: depositsTotal,
+      investments: investmentsSummary.totalValue,
+      mortgageEquity,
+      creditDebt,
+      goalsSaved,
+      total,
+    };
+  }, [cash, investmentsSummary, savingsAccountsList, deposits, goals, credits]);
+}
