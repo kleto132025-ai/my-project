@@ -12,24 +12,18 @@ import { TransactionsScreen } from '../screens/transactions/TransactionsScreen';
 import { AddTransactionScreen } from '../screens/transactions/AddTransactionScreen';
 import { AnalyticsScreen } from '../screens/analytics/AnalyticsScreen';
 import { BudgetScreen } from '../screens/budget/BudgetScreen';
-import { SavingsScreen } from '../screens/savings/SavingsScreen';
-import { CreditsScreen } from '../screens/credits/CreditsScreen';
 
 const SafeDashboardScreen = withErrorBoundary(DashboardScreen);
 const SafeTransactionsScreen = withErrorBoundary(TransactionsScreen);
 const SafeAddTransactionScreen = withErrorBoundary(AddTransactionScreen);
 const SafeAnalyticsScreen = withErrorBoundary(AnalyticsScreen);
 const SafeBudgetScreen = withErrorBoundary(BudgetScreen);
-const SafeSavingsScreen = withErrorBoundary(SavingsScreen);
-const SafeCreditsScreen = withErrorBoundary(CreditsScreen);
 
 const Tab = createBottomTabNavigator();
 const DashboardStackNav = createNativeStackNavigator();
 const TransactionsStackNav = createNativeStackNavigator();
 const AnalyticsStackNav = createNativeStackNavigator();
 const BudgetStackNav = createNativeStackNavigator();
-const SavingsStackNav = createNativeStackNavigator();
-const CreditsStackNav = createNativeStackNavigator();
 
 function DashboardStack() {
   const theme = useTheme();
@@ -88,36 +82,6 @@ function BudgetStack() {
   );
 }
 
-// Накопления и Кредиты и платежи раньше были доступны только через боковое меню-гамбургер,
-// хотя внутри каждого — по 5 вложенных вкладок (цели/вклады/счета/инвестиции/кэшбэк и
-// кредиты/ипотека/календарь/долги/страховка соответственно). Часть пользователей вообще не
-// находила иконку меню, поэтому оба раздела вынесены прямо в нижнюю панель вкладок.
-function SavingsStack() {
-  const theme = useTheme();
-  return (
-    <SavingsStackNav.Navigator screenOptions={headerScreenOptions(theme)}>
-      <SavingsStackNav.Screen
-        name="SavingsHome"
-        component={SafeSavingsScreen}
-        options={{ title: 'Накопления', headerRight: () => <NotificationBellButton /> }}
-      />
-    </SavingsStackNav.Navigator>
-  );
-}
-
-function CreditsStack() {
-  const theme = useTheme();
-  return (
-    <CreditsStackNav.Navigator screenOptions={headerScreenOptions(theme)}>
-      <CreditsStackNav.Screen
-        name="CreditsHome"
-        component={SafeCreditsScreen}
-        options={{ title: 'Кредиты и платежи', headerRight: () => <NotificationBellButton /> }}
-      />
-    </CreditsStackNav.Navigator>
-  );
-}
-
 export function TabsNavigator() {
   const theme = useTheme();
   return (
@@ -127,10 +91,6 @@ export function TabsNavigator() {
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.textMuted,
         tabBarStyle: { backgroundColor: theme.card, borderTopColor: theme.border },
-        // 6 вкладок вместо прежних 4 — ужимаем шрифт подписи и отступы, чтобы длинные слова
-        // вроде "Накопления" не переносились и не обрезались на узких экранах.
-        tabBarLabelStyle: { fontSize: 10 },
-        tabBarItemStyle: { paddingHorizontal: 0 },
       }}
     >
       <Tab.Screen
@@ -142,16 +102,6 @@ export function TabsNavigator() {
         name="Transactions"
         component={TransactionsStack}
         options={{ title: 'Транзакции', tabBarIcon: ({ color, size }) => <Ionicons name="swap-vertical-outline" size={size} color={color} /> }}
-      />
-      <Tab.Screen
-        name="Savings"
-        component={SavingsStack}
-        options={{ title: 'Накопления', tabBarIcon: ({ color, size }) => <Ionicons name="cash-outline" size={size} color={color} /> }}
-      />
-      <Tab.Screen
-        name="Credits"
-        component={CreditsStack}
-        options={{ title: 'Кредиты', tabBarIcon: ({ color, size }) => <Ionicons name="card-outline" size={size} color={color} /> }}
       />
       <Tab.Screen
         name="Analytics"

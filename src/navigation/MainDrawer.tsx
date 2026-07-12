@@ -5,6 +5,8 @@ import { useTheme } from '../theme';
 import { TabsNavigator } from './TabsNavigator';
 import { createSimpleStack } from './SimpleStack';
 import { ExtraFeaturesStack } from './ExtraFeaturesStack';
+import { SavingsScreen } from '../screens/savings/SavingsScreen';
+import { CreditsScreen } from '../screens/credits/CreditsScreen';
 import { PeriodComparisonScreen } from '../screens/analytics/PeriodComparisonScreen';
 import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
@@ -13,6 +15,8 @@ import { SettingsScreen } from '../screens/settings/SettingsScreen';
 
 const Drawer = createDrawerNavigator();
 
+const SavingsStack = createSimpleStack({ routeName: 'SavingsHome', title: 'Накопления', component: SavingsScreen });
+const CreditsStack = createSimpleStack({ routeName: 'CreditsHome', title: 'Кредиты и платежи', component: CreditsScreen });
 const PeriodComparisonStack = createSimpleStack({
   routeName: 'PeriodComparisonHome',
   title: 'Сравнение периодов',
@@ -47,6 +51,16 @@ export function MainDrawer() {
         name="Tabs"
         component={TabsNavigator}
         options={{ title: 'Главная', drawerIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} /> }}
+      />
+      <Drawer.Screen
+        name="Savings"
+        component={SavingsStack}
+        options={{ title: 'Накопления', drawerIcon: ({ color, size }) => <Ionicons name="cash-outline" size={size} color={color} /> }}
+      />
+      <Drawer.Screen
+        name="Credits"
+        component={CreditsStack}
+        options={{ title: 'Кредиты и платежи', drawerIcon: ({ color, size }) => <Ionicons name="card-outline" size={size} color={color} /> }}
       />
       <Drawer.Screen
         name="PeriodComparison"
