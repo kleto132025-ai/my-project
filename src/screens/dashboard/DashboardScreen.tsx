@@ -171,9 +171,9 @@ export function DashboardScreen() {
             <View style={styles.debtRow}>
               <View style={styles.debtLabelRow}>
                 <Ionicons name="card-outline" size={16} color={theme.accent} />
-                <Text style={{ color: theme.text }}>Кредиты</Text>
+                <Text style={{ color: theme.text, flexShrink: 1 }}>Кредиты</Text>
               </View>
-              <Text style={{ color: theme.text, fontWeight: '700' }}>
+              <Text style={[styles.debtValue, { color: theme.text, fontWeight: '700' }]}>
                 {formatCurrency(debtSummary.creditsRemaining, currency)}
               </Text>
             </View>
@@ -182,17 +182,17 @@ export function DashboardScreen() {
             <View style={styles.debtRow}>
               <View style={styles.debtLabelRow}>
                 <Ionicons name="home-outline" size={16} color={theme.accent} />
-                <Text style={{ color: theme.text }}>Ипотека</Text>
+                <Text style={{ color: theme.text, flexShrink: 1 }}>Ипотека</Text>
               </View>
-              <Text style={{ color: theme.text, fontWeight: '700' }}>
+              <Text style={[styles.debtValue, { color: theme.text, fontWeight: '700' }]}>
                 {formatCurrency(debtSummary.mortgageRemaining, currency)}
               </Text>
             </View>
           )}
           {debtSummary.creditsRemaining > 0 && debtSummary.mortgageRemaining > 0 && (
             <View style={[styles.debtRow, styles.debtTotalRow, { borderTopColor: theme.border }]}>
-              <Text style={{ color: theme.textMuted, fontSize: 13 }}>Итого</Text>
-              <Text style={{ color: theme.accent, fontWeight: '800' }}>
+              <Text style={{ color: theme.textMuted, fontSize: 13, flexShrink: 1, marginRight: spacing.sm }}>Итого</Text>
+              <Text style={[styles.debtValue, { color: theme.accent, fontWeight: '800' }]}>
                 {formatCurrency(debtSummary.totalRemaining, currency)}
               </Text>
             </View>
@@ -211,17 +211,17 @@ export function DashboardScreen() {
               <View style={styles.debtRow}>
                 <View style={styles.debtLabelRow}>
                   <Ionicons name="home-outline" size={16} color={theme.accent} />
-                  <Text style={{ color: theme.text }}>Текущая стоимость</Text>
+                  <Text style={{ color: theme.text, flexShrink: 1 }}>Текущая стоимость</Text>
                 </View>
-                <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(m.currentValue, currency)}</Text>
+                <Text style={[styles.debtValue, { color: theme.text, fontWeight: '700' }]}>{formatCurrency(m.currentValue, currency)}</Text>
               </View>
               <View style={styles.debtRow}>
-                <Text style={{ color: theme.textMuted, fontSize: 13 }}>Останется при продаже сегодня</Text>
-                <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(m.saleProceeds, currency)}</Text>
+                <Text style={{ color: theme.textMuted, fontSize: 13, flexShrink: 1, marginRight: spacing.sm }}>Останется при продаже сегодня</Text>
+                <Text style={[styles.debtValue, { color: theme.text, fontWeight: '700' }]}>{formatCurrency(m.saleProceeds, currency)}</Text>
               </View>
               <View style={[styles.debtRow, styles.debtTotalRow, { borderTopColor: theme.border }]}>
-                <Text style={{ color: theme.textMuted, fontSize: 13 }}>Прирост с учётом расходов</Text>
-                <Text style={{ color: m.netProfit >= 0 ? theme.success : theme.danger, fontWeight: '800' }}>
+                <Text style={{ color: theme.textMuted, fontSize: 13, flexShrink: 1, marginRight: spacing.sm }}>Прирост с учётом расходов</Text>
+                <Text style={[styles.debtValue, { color: m.netProfit >= 0 ? theme.success : theme.danger, fontWeight: '800' }]}>
                   {m.netProfit >= 0 ? '+' : ''}
                   {formatCurrency(m.netProfit, currency)} ({m.netProfit >= 0 ? '+' : ''}
                   {formatNumber(m.netProfitPercent)}%)
@@ -348,7 +348,8 @@ const styles = StyleSheet.create({
   limitHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   categoryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   debtRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
-  debtLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  debtLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, marginRight: spacing.sm },
+  debtValue: { flexShrink: 0, textAlign: 'right' },
   upcomingLabelRow: { gap: 2 },
   debtTotalRow: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 4, paddingTop: spacing.sm },
   mortgageAssetBlock: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.sm, paddingTop: spacing.sm },
