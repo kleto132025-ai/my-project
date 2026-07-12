@@ -18,6 +18,7 @@ import { exportJsonFile, exportTransactionsCsv, importJsonFile } from '../../uti
 import { generateAndSharePdfReport } from '../../utils/report';
 import { reviveBackupData, countBackupEntries, type BackupData } from '../../utils/backup';
 import { filterTransactionsByPeriod, EXPORT_PERIOD_LABELS, type ExportPeriod } from '../../utils/period';
+import { fetchCbrRate, CbrApiError } from '../../utils/cbr';
 import type { Currency, ThemeScheme, AuthMethod } from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
@@ -39,6 +40,21 @@ export function SettingsScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [exportPeriod, setExportPeriod] = useState<ExportPeriod>('all');
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
+
+  const handleFetchCbrRate = async () => {
+    if (settings.currency === 'RUB') return;
+    setIsFetchingRate(true);
+    try {
+      const rate = await fetchCbrRate(settings.currency);
+      settings.setExchangeRate(settings.currency, rate);
+    } catch (e) {
+      const message = e instanceof CbrApiError ? e.message : 'Не удалось получить курс ЦБ РФ';
+      Alert.alert('Не удалось обновить курс', message);
+    } finally {
+      setIsFetchingRate(false);
+    }
+  };
 
   const handleSaveApiKey = async () => {
     if (!apiKeyInput.trim()) return;
@@ -149,12 +165,24 @@ export function SettingsScreen() {
           options={CURRENCIES.map((c) => ({ label: c, value: c }))}
         />
         {settings.currency !== 'RUB' && (
-          <FormInput
-            label={`Курс ${settings.currency} к RUB`}
-            keyboardType="decimal-pad"
-            value={String(settings.exchangeRates[settings.currency])}
-            onChangeText={(v) => settings.setExchangeRate(settings.currency, parseLocaleNumber(v) || 0)}
-          />
+          <>
+            <FormInput
+              label={`Курс ${settings.currency} к RUB`}
+              keyboardType="decimal-pad"
+              value={String(settings.exchangeRates[settings.currency])}
+              onChangeText={(v) => settings.setExchangeRate(settings.currency, parseLocaleNumber(v) || 0)}
+            />
+            <AppButton
+              title={isFetchingRate ? 'Получение курса…' : 'Подставить курс ЦБ РФ'}
+              variant="outline"
+              disabled={isFetchingRate}
+              onPress={handleFetchCbrRate}
+            />
+            <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: spacing.sm }}>
+              Это официальный курс ЦБ РФ на сегодня — банки применяют свою наценку, поэтому
+              после подстановки курс можно поправить вручную под свой банк.
+            </Text>
+          </>
         )}
       </Card>
 
