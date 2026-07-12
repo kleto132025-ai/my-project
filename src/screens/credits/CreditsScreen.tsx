@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Alert } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
 import { CardActions } from '../../components/CardActions';
@@ -183,7 +183,10 @@ export function CreditsScreen() {
   const formKind: CreditKind = segment === 'mortgage' ? 'mortgage' : 'credit';
 
   const handleAddCredit = async () => {
-    if (!name.trim() || !amount) return;
+    if (!name.trim() || !amount) {
+      Alert.alert('Проверьте данные', 'Укажите название и сумму');
+      return;
+    }
     const amt = parseLocaleNumber(amount);
     const rt = parseLocaleNumber(rate || '0');
     const tm = parseInt(term, 10) || 24;
@@ -263,7 +266,10 @@ export function CreditsScreen() {
   };
 
   const handleAddDebt = async () => {
-    if (!personName.trim() || !amount) return;
+    if (!personName.trim() || !amount) {
+      Alert.alert('Проверьте данные', 'Укажите имя и сумму');
+      return;
+    }
     const existing = editingId ? friendDebts.find((d) => d.id === editingId) : undefined;
     await saveFriendDebt({
       ...(editingId ? { id: editingId } : {}),
@@ -287,7 +293,10 @@ export function CreditsScreen() {
   };
 
   const handleAddInsurance = async () => {
-    if (!insuranceType.trim() || !insurer.trim() || !amount) return;
+    if (!insuranceType.trim() || !insurer.trim() || !amount) {
+      Alert.alert('Проверьте данные', 'Укажите вид страховки, страховщика и сумму');
+      return;
+    }
     const policy: InsurancePolicy = {
       ...(editingId ? { id: editingId } : {}),
       type: insuranceType.trim(),

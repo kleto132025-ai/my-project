@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch } from 'react-native';
+import { View, Text, StyleSheet, Switch, Alert } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
 import { CardActions } from '../../components/CardActions';
@@ -72,7 +72,10 @@ export function RegularPaymentsScreen() {
   };
 
   const handleSave = async () => {
-    if (!name.trim() || !amount) return;
+    if (!name.trim() || !amount) {
+      Alert.alert('Проверьте данные', 'Укажите название и сумму платежа');
+      return;
+    }
     const from = clampDay(dayFrom, 1);
     const to = hasRange ? Math.max(clampDay(dayTo, from), from) : from;
 

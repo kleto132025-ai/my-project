@@ -10,19 +10,38 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// На некоторых устройствах/версиях Expo Go запрос разрешений или планирование уведомления
+// не бросает ошибку, а просто зависает без ответа (Android заметно урезал поддержку локальных
+// уведомлений в Expo Go начиная с SDK 53). Обычный try/catch от зависшего промиса не спасает —
+// он ничего не перехватит, если промис никогда не завершится. Поэтому все вызовы ниже
+// ограничены по времени: если ответа нет за 5 секунд, считаем это неудачей и не блокируем
+// форму сохранения.
+function withTimeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Превышено время ожидания')), ms)),
+  ]);
+}
+
 export async function requestNotificationPermissions(): Promise<boolean> {
-  const { status } = await Notifications.requestPermissionsAsync();
-  return status === 'granted';
+  try {
+    const { status } = await withTimeout(Notifications.requestPermissionsAsync());
+    return status === 'granted';
+  } catch {
+    return false;
+  }
 }
 
 export async function scheduleReminder(title: string, body: string, triggerDate: Date): Promise<void> {
   // Если дата напоминания уже в прошлом (например, событие добавили задним числом),
   // молча пропускаем — планировать уведомление на прошлое не имеет смысла.
   if (triggerDate.getTime() <= Date.now()) return;
-  await Notifications.scheduleNotificationAsync({
-    content: { title, body },
-    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: triggerDate },
-  });
+  await withTimeout(
+    Notifications.scheduleNotificationAsync({
+      content: { title, body },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: triggerDate },
+    })
+  );
 }
 
 export async function schedulePaymentReminders(paymentName: string, dueDate: Date): Promise<void> {
@@ -42,35 +61,39 @@ export async function schedulePaymentReminders(paymentName: string, dueDate: Dat
 // пропасть после первого же года/месяца.
 export async function scheduleInsuranceReminder(policy: InsurancePolicy): Promise<void> {
   if (policy.paymentFrequency === 'monthly') {
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Ежемесячный взнос по страховке',
-        body: `${policy.type} — не забудьте оплатить, иначе банк может поднять ставку`,
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
-        day: policy.endDate.getDate(),
-        hour: 10,
-        minute: 0,
-      },
-    });
+    await withTimeout(
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Ежемесячный взнос по страховке',
+          body: `${policy.type} — не забудьте оплатить, иначе банк может поднять ставку`,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
+          day: policy.endDate.getDate(),
+          hour: 10,
+          minute: 0,
+        },
+      })
+    );
     return;
   }
   const reminderDate = new Date(policy.endDate);
   reminderDate.setDate(reminderDate.getDate() - 30);
-  await Notifications.scheduleNotificationAsync({
-    content: {
-      title: 'Страховка скоро истекает',
-      body: `${policy.type} — продление через 30 дней`,
-    },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.YEARLY,
-      day: reminderDate.getDate(),
-      month: reminderDate.getMonth(),
-      hour: 10,
-      minute: 0,
-    },
-  });
+  await withTimeout(
+    Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Страховка скоро истекает',
+        body: `${policy.type} — продление через 30 дней`,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.YEARLY,
+        day: reminderDate.getDate(),
+        month: reminderDate.getMonth(),
+        hour: 10,
+        minute: 0,
+      },
+    })
+  );
 }
 
 // Регулярный платёж (ЖКХ, интернет, детский сад, курсы и т.п.) напоминается ежемесячно —
@@ -82,13 +105,15 @@ export async function scheduleRegularPaymentReminder(payment: RegularPayment): P
   const body = payment.dayOfMonthEnd
     ? `${payment.name} — можно оплатить с ${payment.dayOfMonth} по ${payment.dayOfMonthEnd} число`
     : `${payment.name} — не забудьте оплатить`;
-  await Notifications.scheduleNotificationAsync({
-    content: { title: 'Регулярный платёж', body },
-    trigger: {
-      type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
-      day: payment.dayOfMonth,
-      hour: 10,
-      minute: 0,
-    },
-  });
+  await withTimeout(
+    Notifications.scheduleNotificationAsync({
+      content: { title: 'Регулярный платёж', body },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
+        day: payment.dayOfMonth,
+        hour: 10,
+        minute: 0,
+      },
+    })
+  );
 }
