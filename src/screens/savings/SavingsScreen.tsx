@@ -744,9 +744,9 @@ export function SavingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  itemTitle: { fontSize: 15, fontWeight: '700' },
+  itemTitle: { fontSize: 15, fontWeight: '700', flexShrink: 1, marginRight: spacing.sm },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
   scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   moexResultRow: { borderWidth: 1, borderRadius: 8, padding: spacing.sm, marginBottom: 6 },
 });

@@ -827,9 +827,9 @@ export function CreditsScreen() {
 }
 
 const styles = StyleSheet.create({
-  itemTitle: { fontSize: 15, fontWeight: '700' },
+  itemTitle: { fontSize: 15, fontWeight: '700', flexShrink: 1, marginRight: spacing.sm },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
   scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   summaryCard: { padding: spacing.md },
   summaryLabel: { color: '#E2E8F0', fontSize: 13, marginBottom: 4 },

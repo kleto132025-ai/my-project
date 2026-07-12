@@ -189,9 +189,9 @@ export function RegularPaymentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  itemTitle: { fontSize: 15, fontWeight: '700' },
+  itemTitle: { fontSize: 15, fontWeight: '700', flexShrink: 1, marginRight: spacing.sm },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
   dayRangeRow: { flexDirection: 'row', gap: spacing.sm },
   dayRangeField: { flex: 1 },
 });

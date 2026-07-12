@@ -139,7 +139,7 @@ export function RecurringTemplatesScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 15, fontWeight: '700' },
+  title: { fontSize: 15, fontWeight: '700', flexShrink: 1, marginRight: spacing.sm },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
 });
