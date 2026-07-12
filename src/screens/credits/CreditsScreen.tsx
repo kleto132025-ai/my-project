@@ -61,6 +61,9 @@ export function CreditsScreen() {
   const [issueDate, setIssueDate] = useState(new Date());
   const [propertyAddress, setPropertyAddress] = useState('');
   const [downPayment, setDownPayment] = useState('');
+  const [currentValue, setCurrentValue] = useState('');
+  const [renovationCosts, setRenovationCosts] = useState('');
+  const [insuranceCreditId, setInsuranceCreditId] = useState('');
   const [personName, setPersonName] = useState('');
   const [debtStatus, setDebtStatus] = useState<DebtStatus>('i_owe');
   const [reminderDate, setReminderDate] = useState(new Date(Date.now() + 7 * 24 * 3600 * 1000));
@@ -88,6 +91,9 @@ export function CreditsScreen() {
     setIssueDate(new Date());
     setPropertyAddress('');
     setDownPayment('');
+    setCurrentValue('');
+    setRenovationCosts('');
+    setInsuranceCreditId('');
     setPersonName('');
     setInsuranceType('');
     setInsurer('');
@@ -106,7 +112,9 @@ export function CreditsScreen() {
     setIssueDate(c.startDate);
     setNextPaymentDateInput(c.nextPaymentDate);
     setPropertyAddress(c.propertyAddress ?? '');
-    setDownPayment(c.downPayment !== undefined ? String(c.downPayment) : '');
+    setDownPayment(c.downPayment != null ? String(c.downPayment) : '');
+    setCurrentValue(c.currentValue != null ? String(c.currentValue) : '');
+    setRenovationCosts(c.renovationCosts != null ? String(c.renovationCosts) : '');
     setEditingId(c.id);
     setShowForm(true);
   };
@@ -125,6 +133,7 @@ export function CreditsScreen() {
     setInsurer(p.insurer);
     setAmount(String(p.amount));
     setEndDate(p.endDate);
+    setInsuranceCreditId(p.creditId ?? '');
     setEditingId(p.id);
     setShowForm(true);
   };
@@ -167,6 +176,8 @@ export function CreditsScreen() {
       startDate: issueDate,
       propertyAddress: formKind === 'mortgage' ? propertyAddress.trim() || undefined : undefined,
       downPayment: formKind === 'mortgage' && downPayment ? parseLocaleNumber(downPayment) : undefined,
+      currentValue: formKind === 'mortgage' && currentValue ? parseLocaleNumber(currentValue) : undefined,
+      renovationCosts: formKind === 'mortgage' && renovationCosts ? parseLocaleNumber(renovationCosts) : undefined,
     } as Credit);
     resetForm();
   };
@@ -232,6 +243,7 @@ export function CreditsScreen() {
       insurer: insurer.trim(),
       amount: parseLocaleNumber(amount),
       endDate,
+      creditId: insuranceCreditId || undefined,
     } as InsurancePolicy);
     if (!editingId) {
       const granted = await requestNotificationPermissions();
@@ -281,6 +293,21 @@ export function CreditsScreen() {
       .sort((a, b) => b.date.getTime() - a.date.getTime());
     const fullRepayment = history.find((r) => r.type === 'full');
 
+    // Проценты, выплаченные на сегодня — сумма разницы между внесённым платежом и той его
+    // частью, что реально ушла в основной долг (principalPortion). Для чистой прибыли по
+    // объекту берём именно проценты, а не весь платёж, т.к. основной долг просто переходит
+    // из наличных в собственный капитал и сам по себе не является расходом.
+    const totalInterestPaid = history.reduce((sum, r) => sum + (r.amount - r.principalPortion), 0);
+    const linkedInsurance = insurancePolicies.filter((p) => p.creditId === c.id);
+    const totalInsuranceCost = linkedInsurance.reduce((sum, p) => sum + p.amount, 0);
+    // Чистая прибыль от объекта = (текущая стоимость − стоимость покупки) − все расходы на
+    // владение (проценты, ремонт, страховка). Погашение тела кредита в формулу не входит —
+    // оно не тратит деньги, а переводит их в капитал (равенство видно в самой стоимости).
+    const netProfit =
+      c.currentValue != null
+        ? c.currentValue - (c.amount + (c.downPayment ?? 0)) - totalInterestPaid - (c.renovationCosts ?? 0) - totalInsuranceCost
+        : null;
+
     // График строится не от исходной суммы кредита, а от текущего фактического остатка
     // (c.remaining) — иначе после любых внесённых платежей график продолжал бы показывать
     // цифры так, будто ни один платёж ещё не был сделан. Даты платежей отсчитываются от
@@ -309,11 +336,11 @@ export function CreditsScreen() {
           Дата выдачи: {c.startDate.toLocaleDateString('ru-RU')}
           {c.remaining > 0 ? ` · Следующий платёж: ${c.nextPaymentDate.toLocaleDateString('ru-RU')}` : ''}
         </Text>
-        {c.kind === 'mortgage' && (c.propertyAddress || c.downPayment !== undefined) && (
+        {c.kind === 'mortgage' && (c.propertyAddress || c.downPayment != null) && (
           <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
             {c.propertyAddress ? `Объект: ${c.propertyAddress}` : ''}
-            {c.propertyAddress && c.downPayment !== undefined ? ' · ' : ''}
-            {c.downPayment !== undefined ? `Первонач. взнос: ${formatCurrency(c.downPayment, currency)}` : ''}
+            {c.propertyAddress && c.downPayment != null ? ' · ' : ''}
+            {c.downPayment != null ? `Первонач. взнос: ${formatCurrency(c.downPayment, currency)}` : ''}
           </Text>
         )}
         <ProgressBar percent={progress} />
@@ -324,6 +351,43 @@ export function CreditsScreen() {
           <Text style={{ color: theme.success, marginTop: 4, fontSize: 12, fontWeight: '600' }}>
             Полностью погашен: {fullRepayment.date.toLocaleDateString('ru-RU')}
           </Text>
+        )}
+        {c.kind === 'mortgage' && (totalInterestPaid > 0 || c.currentValue != null) && (
+          <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }}>
+            {totalInterestPaid > 0 && (
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
+                Выплачено процентов на сегодня: {formatCurrency(totalInterestPaid, currency)}
+              </Text>
+            )}
+            {c.renovationCosts != null && c.renovationCosts > 0 && (
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
+                Расходы на ремонт: {formatCurrency(c.renovationCosts, currency)}
+              </Text>
+            )}
+            {totalInsuranceCost > 0 && (
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
+                Страховка объекта/жизни: {formatCurrency(totalInsuranceCost, currency)}
+              </Text>
+            )}
+            {c.currentValue != null && (
+              <>
+                <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
+                  Текущая стоимость объекта: {formatCurrency(c.currentValue, currency)}
+                </Text>
+                <Text
+                  style={{
+                    color: (netProfit ?? 0) >= 0 ? theme.success : theme.danger,
+                    fontSize: 13,
+                    fontWeight: '700',
+                    marginTop: 4,
+                  }}
+                >
+                  Чистая прибыль от объекта на сегодня: {(netProfit ?? 0) >= 0 ? '+' : ''}
+                  {formatCurrency(netProfit ?? 0, currency)}
+                </Text>
+              </>
+            )}
+          </View>
         )}
         <AppButton
           title={isExpanded ? 'Скрыть график' : 'График погашения'}
@@ -463,6 +527,19 @@ export function CreditsScreen() {
         <>
           <FormInput label="Объект недвижимости" value={propertyAddress} onChangeText={setPropertyAddress} placeholder="Адрес или описание" />
           <FormInput label="Первоначальный взнос" keyboardType="decimal-pad" value={downPayment} onChangeText={setDownPayment} />
+          <FormInput
+            label="Текущая рыночная стоимость объекта"
+            keyboardType="decimal-pad"
+            value={currentValue}
+            onChangeText={setCurrentValue}
+            placeholder="Для расчёта чистой прибыли от объекта"
+          />
+          <FormInput
+            label="Расходы на ремонт (всего)"
+            keyboardType="decimal-pad"
+            value={renovationCosts}
+            onChangeText={setRenovationCosts}
+          />
         </>
       )}
       <AppButton title={isEditing ? 'Сохранить изменения' : submitLabel} onPress={handleAddCredit} />
@@ -621,6 +698,11 @@ export function CreditsScreen() {
                 <Text style={{ color: theme.textMuted, fontSize: 12 }}>
                   Окончание: {p.endDate.toLocaleDateString('ru-RU')}
                 </Text>
+                {p.creditId && (
+                  <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                    Ипотека: {allCredits.find((c) => c.id === p.creditId)?.name ?? '—'}
+                  </Text>
+                )}
               </Card>
             ))
           )}
@@ -630,6 +712,18 @@ export function CreditsScreen() {
               <FormInput label="Страховщик" value={insurer} onChangeText={setInsurer} />
               <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               <DateField label="Дата окончания" value={endDate} onChange={setEndDate} />
+              {mortgages.length > 0 && (
+                <>
+                  <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+                    Относится к ипотеке (страхование жизни/объекта)
+                  </Text>
+                  <SegmentedControl
+                    value={insuranceCreditId}
+                    onChange={setInsuranceCreditId}
+                    options={[{ label: 'Не привязано', value: '' }, ...mortgages.map((m) => ({ label: m.name, value: m.id }))]}
+                  />
+                </>
+              )}
               <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить полис'} onPress={handleAddInsurance} />
               <View style={{ height: spacing.sm }} />
               <AppButton title="Отмена" variant="outline" onPress={resetForm} />

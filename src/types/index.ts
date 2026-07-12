@@ -45,6 +45,10 @@ export interface Credit {
   propertyAddress?: string;
   /** Только для kind === 'mortgage'. */
   downPayment?: number;
+  /** Только для kind === 'mortgage'. Текущая рыночная стоимость объекта — для расчёта чистой прибыли. */
+  currentValue?: number;
+  /** Только для kind === 'mortgage'. Накопленные расходы на ремонт объекта. */
+  renovationCosts?: number;
 }
 
 export type CreditRepaymentType = 'regular' | 'partial' | 'full';
@@ -145,6 +149,8 @@ export interface InsurancePolicy {
   insurer: string;
   amount: number;
   endDate: Date;
+  /** Если полис оформлен по конкретному кредиту/ипотеке (страхование жизни/объекта) — id кредита. */
+  creditId?: string;
 }
 
 export type WishStatus = 'postponed' | 'buying_soon' | 'fulfilled';

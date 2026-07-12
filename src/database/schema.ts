@@ -39,7 +39,9 @@ CREATE TABLE IF NOT EXISTS credits (
   nextPaymentDate TEXT NOT NULL,
   startDate TEXT NOT NULL,
   propertyAddress TEXT,
-  downPayment REAL
+  downPayment REAL,
+  currentValue REAL,
+  renovationCosts REAL
 );
 
 -- История досрочных погашений: одна запись на каждое частичное или полное погашение,
@@ -130,7 +132,8 @@ CREATE TABLE IF NOT EXISTS insurance_policies (
   type TEXT NOT NULL,
   insurer TEXT NOT NULL,
   amount REAL NOT NULL,
-  endDate TEXT NOT NULL
+  endDate TEXT NOT NULL,
+  creditId TEXT
 );
 
 CREATE TABLE IF NOT EXISTS wishlist_items (

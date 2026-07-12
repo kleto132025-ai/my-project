@@ -121,12 +121,13 @@ export async function listCredits(): Promise<Credit[]> {
 export async function upsertCredit(c: Credit): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO credits (id, kind, name, amount, rate, termMonths, monthlyPayment, remaining, nextPaymentDate, startDate, propertyAddress, downPayment)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO credits (id, kind, name, amount, rate, termMonths, monthlyPayment, remaining, nextPaymentDate, startDate, propertyAddress, downPayment, currentValue, renovationCosts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, name=excluded.name, amount=excluded.amount, rate=excluded.rate,
        termMonths=excluded.termMonths, monthlyPayment=excluded.monthlyPayment, remaining=excluded.remaining,
        nextPaymentDate=excluded.nextPaymentDate, startDate=excluded.startDate,
-       propertyAddress=excluded.propertyAddress, downPayment=excluded.downPayment;`,
+       propertyAddress=excluded.propertyAddress, downPayment=excluded.downPayment,
+       currentValue=excluded.currentValue, renovationCosts=excluded.renovationCosts;`,
     [
       c.id,
       c.kind,
@@ -140,6 +141,8 @@ export async function upsertCredit(c: Credit): Promise<void> {
       c.startDate.toISOString(),
       c.propertyAddress ?? null,
       c.downPayment ?? null,
+      c.currentValue ?? null,
+      c.renovationCosts ?? null,
     ]
   );
 }
@@ -399,22 +402,22 @@ export async function deleteFriendDebt(id: string): Promise<void> {
 
 // ---------- Insurance ----------
 
-type InsuranceRow = Omit<InsurancePolicy, 'endDate'> & { endDate: string };
+type InsuranceRow = Omit<InsurancePolicy, 'endDate' | 'creditId'> & { endDate: string; creditId: string | null };
 
 export async function listInsurancePolicies(): Promise<InsurancePolicy[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<InsuranceRow>('SELECT * FROM insurance_policies;');
-  return rows.map((r) => ({ ...r, endDate: new Date(r.endDate) }));
+  return rows.map((r) => ({ ...r, endDate: new Date(r.endDate), creditId: r.creditId ?? undefined }));
 }
 
 export async function upsertInsurancePolicy(p: InsurancePolicy): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO insurance_policies (id, type, insurer, amount, endDate)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO insurance_policies (id, type, insurer, amount, endDate, creditId)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET type=excluded.type, insurer=excluded.insurer,
-       amount=excluded.amount, endDate=excluded.endDate;`,
-    [p.id, p.type, p.insurer, p.amount, p.endDate.toISOString()]
+       amount=excluded.amount, endDate=excluded.endDate, creditId=excluded.creditId;`,
+    [p.id, p.type, p.insurer, p.amount, p.endDate.toISOString(), p.creditId ?? null]
   );
 }
 
