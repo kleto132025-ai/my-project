@@ -10,6 +10,7 @@ import type {
   SavingsAccount,
   SavingsAccrual,
   Investment,
+  InvestmentPayout,
   FriendDebt,
   InsurancePolicy,
   WishlistItem,
@@ -327,6 +328,40 @@ export async function upsertInvestment(i: Investment): Promise<void> {
 export async function deleteInvestment(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('DELETE FROM investments WHERE id = ?;', [id]);
+  await db.runAsync('DELETE FROM investment_payouts WHERE investmentId = ?;', [id]);
+}
+
+// ---------- Investment payouts (дивиденды / купоны) ----------
+
+type InvestmentPayoutRow = Omit<InvestmentPayout, 'date'> & { date: string };
+
+export async function listInvestmentPayouts(): Promise<InvestmentPayout[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<InvestmentPayoutRow>(
+    'SELECT * FROM investment_payouts ORDER BY date DESC;'
+  );
+  return rows.map((r) => ({ ...r, date: new Date(r.date) }));
+}
+
+export async function insertInvestmentPayout(p: InvestmentPayout): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO investment_payouts (id, investmentId, date, amount) VALUES (?, ?, ?, ?);`,
+    [p.id, p.investmentId, p.date.toISOString(), p.amount]
+  );
+}
+
+export async function updateInvestmentPayout(p: InvestmentPayout): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE investment_payouts SET date = ?, amount = ? WHERE id = ?;`,
+    [p.date.toISOString(), p.amount, p.id]
+  );
+}
+
+export async function deleteInvestmentPayout(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM investment_payouts WHERE id = ?;', [id]);
 }
 
 // ---------- Friend debts ----------
@@ -546,7 +581,7 @@ export async function resetAllData(): Promise<void> {
   const tables = [
     'transactions', 'goals', 'credits', 'credit_repayments', 'budget_limits', 'regular_payments', 'deposits',
     'savings_accounts', 'savings_accruals',
-    'investments', 'friend_debts', 'insurance_policies', 'wishlist_items', 'notifications',
+    'investments', 'investment_payouts', 'friend_debts', 'insurance_policies', 'wishlist_items', 'notifications',
     'cashback_cards', 'achievements', 'recurring_templates', 'user_profile', 'app_meta',
   ];
   await db.withTransactionAsync(async () => {

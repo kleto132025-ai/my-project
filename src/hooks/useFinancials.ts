@@ -101,3 +101,20 @@ export function useDebtSummary(): DebtSummary {
     return { creditsRemaining, mortgageRemaining, totalRemaining: creditsRemaining + mortgageRemaining };
   }, [credits]);
 }
+
+export interface InvestmentsSummary {
+  /** Текущая стоимость портфеля: количество × текущая цена по всем активам. */
+  totalValue: number;
+  /** Сумма всех полученных дивидендов и купонов по всем активам. */
+  totalPayouts: number;
+}
+
+export function useInvestmentsSummary(): InvestmentsSummary {
+  const investments = useFinanceStore((s) => s.investments);
+  const investmentPayouts = useFinanceStore((s) => s.investmentPayouts);
+  return useMemo(() => {
+    const totalValue = investments.reduce((sum, i) => sum + i.quantity * i.currentPrice, 0);
+    const totalPayouts = investmentPayouts.reduce((sum, p) => sum + p.amount, 0);
+    return { totalValue, totalPayouts };
+  }, [investments, investmentPayouts]);
+}

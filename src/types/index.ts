@@ -119,6 +119,15 @@ export interface Investment {
   currentPrice: number;
 }
 
+// Дивиденды (для акций) или купоны (для облигаций) — тип выплаты не хранится отдельно,
+// а определяется по assetType актива на экране, чтобы не дублировать классификацию.
+export interface InvestmentPayout {
+  id: string;
+  investmentId: string;
+  date: Date;
+  amount: number;
+}
+
 export type DebtStatus = 'owed_to_me' | 'i_owe';
 
 export interface FriendDebt {

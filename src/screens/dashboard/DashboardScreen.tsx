@@ -18,6 +18,7 @@ import {
   useForecast,
   useBudgetLimitsWithSpent,
   useDebtSummary,
+  useInvestmentsSummary,
 } from '../../hooks/useFinancials';
 import type { Transaction } from '../../types';
 
@@ -36,6 +37,7 @@ export function DashboardScreen() {
   const topIncomes = useTopCategories('income', 3);
   const forecast = useForecast(1);
   const debtSummary = useDebtSummary();
+  const investmentsSummary = useInvestmentsSummary();
 
   const isNegative = freeFunds < 0;
 
@@ -106,6 +108,29 @@ export function DashboardScreen() {
               <Text style={{ color: theme.textMuted, fontSize: 13 }}>Итого</Text>
               <Text style={{ color: theme.accent, fontWeight: '800' }}>
                 {formatCurrency(debtSummary.totalRemaining, currency)}
+              </Text>
+            </View>
+          )}
+        </Card>
+      )}
+
+      {investmentsSummary.totalValue > 0 && (
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Инвестиции</Text>
+          <View style={styles.debtRow}>
+            <View style={styles.debtLabelRow}>
+              <Ionicons name="trending-up-outline" size={16} color={theme.secondary} />
+              <Text style={{ color: theme.text }}>Текущая стоимость портфеля</Text>
+            </View>
+            <Text style={{ color: theme.text, fontWeight: '700' }}>
+              {formatCurrency(investmentsSummary.totalValue, currency)}
+            </Text>
+          </View>
+          {investmentsSummary.totalPayouts > 0 && (
+            <View style={[styles.debtRow, styles.debtTotalRow, { borderTopColor: theme.border }]}>
+              <Text style={{ color: theme.textMuted, fontSize: 13 }}>Получено дивидендов и купонов</Text>
+              <Text style={{ color: theme.secondary, fontWeight: '800' }}>
+                {formatCurrency(investmentsSummary.totalPayouts, currency)}
               </Text>
             </View>
           )}

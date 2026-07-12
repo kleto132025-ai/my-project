@@ -16,13 +16,20 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
 import { confirmDelete } from '../../utils/confirm';
-import type { AssetType, Goal, Deposit, SavingsAccount, Investment, CashbackCard } from '../../types';
+import type { AssetType, Goal, Deposit, SavingsAccount, Investment, InvestmentPayout, CashbackCard } from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'deposits' | 'accounts' | 'investments' | 'goals' | 'cashback';
 
 const ASSET_TYPES: AssetType[] = ['stock', 'bond', 'crypto', 'fund'];
 const ASSET_LABELS: Record<AssetType, string> = { stock: 'Акции', bond: 'Облигации', crypto: 'Крипта', fund: 'ПИФ' };
+// Тип выплаты определяется по классу актива: акции платят дивиденды, облигации — купоны.
+const PAYOUT_LABELS: Record<AssetType, string> = {
+  stock: 'Дивиденды',
+  bond: 'Купоны',
+  crypto: 'Выплата',
+  fund: 'Выплата',
+};
 
 export function SavingsScreen() {
   const theme = useTheme();
@@ -35,16 +42,26 @@ export function SavingsScreen() {
   const savingsAccounts = useFinanceStore((s) => s.savingsAccounts);
   const savingsAccruals = useFinanceStore((s) => s.savingsAccruals);
   const investments = useFinanceStore((s) => s.investments);
+  const investmentPayouts = useFinanceStore((s) => s.investmentPayouts);
   const goals = useFinanceStore((s) => s.goals);
   const cashbackCards = useFinanceStore((s) => s.cashbackCards);
   const saveDeposit = useFinanceStore((s) => s.saveDeposit);
   const saveSavingsAccount = useFinanceStore((s) => s.saveSavingsAccount);
   const saveInvestment = useFinanceStore((s) => s.saveInvestment);
+  const addInvestmentPayout = useFinanceStore((s) => s.addInvestmentPayout);
+  const editInvestmentPayout = useFinanceStore((s) => s.editInvestmentPayout);
+  const removeInvestmentPayout = useFinanceStore((s) => s.removeInvestmentPayout);
   const saveGoal = useFinanceStore((s) => s.saveGoal);
   const saveCashbackCard = useFinanceStore((s) => s.saveCashbackCard);
   const removeDeposit = useFinanceStore((s) => s.removeDeposit);
   const removeSavingsAccount = useFinanceStore((s) => s.removeSavingsAccount);
   const removeInvestment = useFinanceStore((s) => s.removeInvestment);
+  const [expandedInvestmentId, setExpandedInvestmentId] = useState<string | null>(null);
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutDate, setPayoutDate] = useState(new Date());
+  const [editingPayoutId, setEditingPayoutId] = useState<string | null>(null);
+  const [payoutEditAmount, setPayoutEditAmount] = useState('');
+  const [payoutEditDate, setPayoutEditDate] = useState(new Date());
   const removeGoal = useFinanceStore((s) => s.removeGoal);
   const removeCashbackCard = useFinanceStore((s) => s.removeCashbackCard);
 
@@ -159,6 +176,33 @@ export function SavingsScreen() {
       currentPrice: parseLocaleNumber(currentPrice || purchasePrice || '0'),
     } as Investment);
     resetForm();
+  };
+
+  const handleAddPayout = async (investmentId: string) => {
+    const payAmount = parseLocaleNumber(payoutAmount);
+    if (Number.isNaN(payAmount) || payAmount <= 0) return;
+    await addInvestmentPayout(investmentId, payAmount, payoutDate);
+    setPayoutAmount('');
+    setPayoutDate(new Date());
+  };
+
+  const startEditPayout = (p: InvestmentPayout) => {
+    setEditingPayoutId(p.id);
+    setPayoutEditAmount(String(p.amount));
+    setPayoutEditDate(p.date);
+  };
+
+  const cancelEditPayout = () => {
+    setEditingPayoutId(null);
+    setPayoutEditAmount('');
+  };
+
+  const handleSavePayoutEdit = async () => {
+    if (!editingPayoutId) return;
+    const editAmount = parseLocaleNumber(payoutEditAmount);
+    if (Number.isNaN(editAmount) || editAmount <= 0) return;
+    await editInvestmentPayout(editingPayoutId, editAmount, payoutEditDate);
+    cancelEditPayout();
   };
 
   const handleAddGoal = async () => {
@@ -364,6 +408,12 @@ export function SavingsScreen() {
             investments.map((i) => {
               const profitPercent =
                 i.purchasePrice > 0 ? ((i.currentPrice - i.purchasePrice) / i.purchasePrice) * 100 : 0;
+              const isExpanded = expandedInvestmentId === i.id;
+              const payoutLabel = PAYOUT_LABELS[i.assetType];
+              const payouts = investmentPayouts
+                .filter((p) => p.investmentId === i.id)
+                .sort((a, b) => b.date.getTime() - a.date.getTime());
+              const totalPayouts = payouts.reduce((sum, p) => sum + p.amount, 0);
               return (
                 <Card key={i.id}>
                   <View style={styles.rowBetween}>
@@ -380,6 +430,66 @@ export function SavingsScreen() {
                     {profitPercent >= 0 ? '+' : ''}
                     {formatNumber(profitPercent)}%
                   </Text>
+                  {totalPayouts > 0 && (
+                    <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
+                      {payoutLabel} всего: {formatCurrency(totalPayouts, currency)}
+                    </Text>
+                  )}
+                  <AppButton
+                    title={isExpanded ? 'Скрыть выплаты' : `${payoutLabel}`}
+                    variant="outline"
+                    onPress={() => setExpandedInvestmentId(isExpanded ? null : i.id)}
+                  />
+                  {isExpanded && (
+                    <View style={{ marginTop: spacing.sm }}>
+                      {payouts.length > 0 && (
+                        <View style={{ marginBottom: spacing.sm }}>
+                          {payouts.map((p) =>
+                            editingPayoutId === p.id ? (
+                              <View key={p.id} style={{ marginBottom: spacing.sm }}>
+                                <FormInput
+                                  label="Сумма"
+                                  keyboardType="decimal-pad"
+                                  value={payoutEditAmount}
+                                  onChangeText={setPayoutEditAmount}
+                                />
+                                <DateField label="Дата" value={payoutEditDate} onChange={setPayoutEditDate} />
+                                <AppButton title="Сохранить" onPress={handleSavePayoutEdit} />
+                                <View style={{ height: spacing.xs }} />
+                                <AppButton title="Отмена" variant="outline" onPress={cancelEditPayout} />
+                              </View>
+                            ) : (
+                              <View key={p.id} style={styles.scheduleRow}>
+                                <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                                  {p.date.toLocaleDateString('ru-RU')}
+                                </Text>
+                                <Text style={{ color: theme.text, fontSize: 12 }}>{formatCurrency(p.amount, currency)}</Text>
+                                <CardActions
+                                  onEdit={() => startEditPayout(p)}
+                                  onDelete={() =>
+                                    confirmDelete(`${payoutLabel.toLowerCase()} от ${p.date.toLocaleDateString('ru-RU')}`, () =>
+                                      removeInvestmentPayout(p.id)
+                                    )
+                                  }
+                                />
+                              </View>
+                            )
+                          )}
+                        </View>
+                      )}
+                      <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
+                        Добавить {payoutLabel.toLowerCase()}
+                      </Text>
+                      <FormInput
+                        label="Сумма"
+                        keyboardType="decimal-pad"
+                        value={payoutAmount}
+                        onChangeText={setPayoutAmount}
+                      />
+                      <DateField label="Дата" value={payoutDate} onChange={setPayoutDate} />
+                      <AppButton title="Добавить" onPress={() => handleAddPayout(i.id)} />
+                    </View>
+                  )}
                 </Card>
               );
             })
@@ -456,4 +566,5 @@ const styles = StyleSheet.create({
   itemTitle: { fontSize: 15, fontWeight: '700' },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
 });

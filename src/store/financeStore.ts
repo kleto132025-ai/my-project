@@ -11,6 +11,7 @@ import type {
   SavingsAccount,
   SavingsAccrual,
   Investment,
+  InvestmentPayout,
   FriendDebt,
   InsurancePolicy,
   WishlistItem,
@@ -37,6 +38,7 @@ interface FinanceState {
   savingsAccounts: SavingsAccount[];
   savingsAccruals: SavingsAccrual[];
   investments: Investment[];
+  investmentPayouts: InvestmentPayout[];
   friendDebts: FriendDebt[];
   insurancePolicies: InsurancePolicy[];
   wishlistItems: WishlistItem[];
@@ -94,6 +96,11 @@ interface FinanceState {
   saveInvestment: (i: Investment | Omit<Investment, 'id'>) => Promise<void>;
   removeInvestment: (id: string) => Promise<void>;
 
+  /** Записывает дивиденд/купон по активу (сумма + дата), не меняя количество/цену актива. */
+  addInvestmentPayout: (investmentId: string, amount: number, date: Date) => Promise<void>;
+  editInvestmentPayout: (payoutId: string, amount: number, date: Date) => Promise<void>;
+  removeInvestmentPayout: (payoutId: string) => Promise<void>;
+
   saveFriendDebt: (d: FriendDebt | Omit<FriendDebt, 'id'>) => Promise<void>;
   removeFriendDebt: (id: string) => Promise<void>;
 
@@ -135,6 +142,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   savingsAccounts: [],
   savingsAccruals: [],
   investments: [],
+  investmentPayouts: [],
   friendDebts: [],
   insurancePolicies: [],
   wishlistItems: [],
@@ -148,20 +156,20 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await seedDemoDataIfNeeded();
     const [
       transactions, goals, credits, creditRepayments, budgetLimits, regularPayments, deposits,
-      savingsAccounts, savingsAccruals, investments,
+      savingsAccounts, savingsAccruals, investments, investmentPayouts,
       friendDebts, insurancePolicies, wishlistItems, notifications, cashbackCards, achievements,
       recurringTemplates, profile,
     ] = await Promise.all([
       repo.listTransactions(), repo.listGoals(), repo.listCredits(), repo.listCreditRepayments(), repo.listBudgetLimits(),
       repo.listRegularPayments(), repo.listDeposits(), repo.listSavingsAccounts(), repo.listSavingsAccruals(),
-      repo.listInvestments(),
+      repo.listInvestments(), repo.listInvestmentPayouts(),
       repo.listFriendDebts(), repo.listInsurancePolicies(), repo.listWishlistItems(),
       repo.listNotifications(), repo.listCashbackCards(), repo.listAchievements(),
       repo.listRecurringTemplates(), repo.getUserProfile(),
     ]);
     set({
       transactions, goals, credits, creditRepayments, budgetLimits, regularPayments, deposits,
-      savingsAccounts, savingsAccruals, investments,
+      savingsAccounts, savingsAccruals, investments, investmentPayouts,
       friendDebts, insurancePolicies, wishlistItems, notifications, cashbackCards, achievements,
       recurringTemplates, profile, isLoaded: true,
     });
@@ -430,7 +438,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   },
   removeInvestment: async (id) => {
     await repo.deleteInvestment(id);
-    set((state) => ({ investments: state.investments.filter((i) => i.id !== id) }));
+    set((state) => ({
+      investments: state.investments.filter((i) => i.id !== id),
+      investmentPayouts: state.investmentPayouts.filter((p) => p.investmentId !== id),
+    }));
+  },
+
+  addInvestmentPayout: async (investmentId, amount, date) => {
+    if (amount <= 0) return;
+    const payout: InvestmentPayout = { id: generateId(), investmentId, date, amount };
+    await repo.insertInvestmentPayout(payout);
+    set((state) => ({ investmentPayouts: [payout, ...state.investmentPayouts] }));
+  },
+  editInvestmentPayout: async (payoutId, amount, date) => {
+    if (amount <= 0) return;
+    const existing = get().investmentPayouts.find((p) => p.id === payoutId);
+    if (!existing) return;
+    const updated: InvestmentPayout = { ...existing, amount, date };
+    await repo.updateInvestmentPayout(updated);
+    set((state) => ({
+      investmentPayouts: state.investmentPayouts.map((p) => (p.id === payoutId ? updated : p)),
+    }));
+  },
+  removeInvestmentPayout: async (payoutId) => {
+    await repo.deleteInvestmentPayout(payoutId);
+    set((state) => ({ investmentPayouts: state.investmentPayouts.filter((p) => p.id !== payoutId) }));
   },
 
   saveFriendDebt: async (d) => {
@@ -546,7 +578,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await setMeta(SEED_FLAG_KEY, 'true');
     set({
       transactions: [], goals: [], credits: [], creditRepayments: [], budgetLimits: [], regularPayments: [],
-      deposits: [], savingsAccounts: [], savingsAccruals: [], investments: [], friendDebts: [], insurancePolicies: [], wishlistItems: [],
+      deposits: [], savingsAccounts: [], savingsAccruals: [], investments: [], investmentPayouts: [], friendDebts: [], insurancePolicies: [], wishlistItems: [],
       notifications: [], cashbackCards: [], achievements: [], recurringTemplates: [], profile: null,
       isLoaded: false,
     });

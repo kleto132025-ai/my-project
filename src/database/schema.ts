@@ -90,6 +90,14 @@ CREATE TABLE IF NOT EXISTS investments (
   currentPrice REAL NOT NULL
 );
 
+-- Дивиденды по акциям / купоны по облигациям — история выплат по конкретному активу.
+CREATE TABLE IF NOT EXISTS investment_payouts (
+  id TEXT PRIMARY KEY NOT NULL,
+  investmentId TEXT NOT NULL,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL
+);
+
 -- Накопительный счёт: в отличие от вклада (deposits), без даты закрытия — остаток может
 -- меняться, а проценты по ставке rate начисляются на остаток раз в календарный месяц
 -- (см. financeStore.accrueSavingsInterest). lastAccrualDate — по какую дату уже начислено.
