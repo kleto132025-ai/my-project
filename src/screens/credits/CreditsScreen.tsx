@@ -426,7 +426,7 @@ export function CreditsScreen() {
             )}
             {totalInsuranceCost > 0 && (
               <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
-                Страховка объекта/жизни: {fmt(totalInsuranceCost)}
+                Страховые взносы (сумма внесённых записей): {fmt(totalInsuranceCost)}
               </Text>
             )}
             {c.currentValue != null && mortgageProfit && (
@@ -783,7 +783,7 @@ export function CreditsScreen() {
             <Card>
               <FormInput label="Тип полиса" value={insuranceType} onChangeText={setInsuranceType} placeholder="ОСАГО" />
               <FormInput label="Страховщик" value={insurer} onChangeText={setInsurer} />
-              <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+              <FormInput label="Сумма взноса" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} placeholder="Сколько заплатили за этот период" />
               <DateField label="Дата окончания" value={endDate} onChange={setEndDate} />
               <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>Как часто вносится взнос</Text>
               <SegmentedControl
@@ -796,6 +796,11 @@ export function CreditsScreen() {
               />
               {mortgages.length > 0 && (
                 <>
+                  <Text style={{ color: theme.textMuted, fontSize: 11, marginBottom: spacing.sm }}>
+                    «Сумма взноса» — это стоимость одной оплаты (не общая сумма страхования за все годы). Если полис
+                    продлевается ежегодно, добавляйте отдельную запись на каждый оплаченный год — тогда «Страховые
+                    взносы» в карточке ипотеки будут суммировать все реально внесённые платежи.
+                  </Text>
                   <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
                     Относится к ипотеке (страхование жизни/объекта)
                   </Text>

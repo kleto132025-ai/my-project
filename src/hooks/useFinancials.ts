@@ -213,6 +213,10 @@ export function useMortgageAssets(): MortgageAsset[] {
           new Date(),
           earlyRepaymentsForSimulation
         ).totalInterestPaid;
+        // Каждая запись InsurancePolicy.amount — это сумма ОДНОГО взноса (годового или
+        // ежемесячного, см. paymentFrequency), а не совокупная стоимость страхования за все
+        // годы. Поэтому totalInsuranceCost корректен только если пользователь добавляет новую
+        // запись на каждый оплаченный период — сумма ниже складывает именно то, что реально внесено.
         const totalInsuranceCost = insurancePolicies
           .filter((p) => p.creditId === c.id)
           .reduce((sum, p) => sum + p.amount, 0);
