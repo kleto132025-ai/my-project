@@ -91,10 +91,17 @@ export function RegularPaymentsScreen() {
 
     // Напоминание планируется только при создании — чтобы редактирование существующего
     // платежа (например, смена суммы после подорожания ЖКХ) не плодило дублирующиеся
-    // повторяющиеся уведомления поверх уже запланированного.
+    // повторяющиеся уведомления поверх уже запланированного. Обёрнуто в try/catch: платёж
+    // к этому моменту уже сохранён, и сбой планирования уведомления (нет разрешения,
+    // особенности конкретного устройства) не должен мешать закрыть форму — иначе кнопка
+    // "Сохранить" выглядела бы неработающей, хотя запись на самом деле уже добавилась.
     if (!editingId && isActive) {
-      const granted = await requestNotificationPermissions();
-      if (granted) await scheduleRegularPaymentReminder(payment);
+      try {
+        const granted = await requestNotificationPermissions();
+        if (granted) await scheduleRegularPaymentReminder(payment);
+      } catch {
+        // платёж уже сохранён — напоминание можно не ставить, это не повод блокировать форму
+      }
     }
     resetForm();
   };

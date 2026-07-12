@@ -271,8 +271,14 @@ export function CreditsScreen() {
       reminderDate,
     } as FriendDebt);
     if (!editingId) {
-      const granted = await requestNotificationPermissions();
-      if (granted) await schedulePaymentReminders(`Долг: ${personName.trim()}`, reminderDate);
+      // Долг уже сохранён к этому моменту — сбой планирования уведомления (нет разрешения,
+      // особенности устройства) не должен мешать закрыть форму.
+      try {
+        const granted = await requestNotificationPermissions();
+        if (granted) await schedulePaymentReminders(`Долг: ${personName.trim()}`, reminderDate);
+      } catch {
+        // напоминание можно не ставить — это не повод блокировать форму
+      }
     }
     resetForm();
   };
@@ -290,8 +296,14 @@ export function CreditsScreen() {
     } as InsurancePolicy;
     await saveInsurancePolicy(policy);
     if (!editingId) {
-      const granted = await requestNotificationPermissions();
-      if (granted) await scheduleInsuranceReminder(policy);
+      // Полис уже сохранён к этому моменту — сбой планирования уведомления не должен
+      // мешать закрыть форму.
+      try {
+        const granted = await requestNotificationPermissions();
+        if (granted) await scheduleInsuranceReminder(policy);
+      } catch {
+        // напоминание можно не ставить — это не повод блокировать форму
+      }
     }
     resetForm();
   };
