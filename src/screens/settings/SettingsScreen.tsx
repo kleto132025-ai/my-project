@@ -262,13 +262,18 @@ export function SettingsScreen() {
         </Text>
         {aiStore.hasApiKey ? (
           <>
-            <Text style={{ color: theme.success, fontSize: 13, marginBottom: spacing.sm }}>Ключ сохранён</Text>
-            <AppButton title="Удалить ключ" variant="outline" onPress={handleClearApiKey} />
+            <Text style={{ color: theme.success, fontSize: 13, marginBottom: spacing.sm }}>Ключ доступа подключён</Text>
+            <AppButton title="Отключить ИИ (удалить ключ)" variant="outline" onPress={handleClearApiKey} />
           </>
         ) : (
           <>
+            <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: spacing.sm }}>
+              Ключ доступа — это как пароль, который выдаёт сервис Anthropic (создатель ИИ по
+              имени Claude), чтобы приложение могло к нему обращаться. Получить его можно
+              бесплатно по кнопке ниже, зарегистрировавшись на их сайте, а затем вставить сюда.
+            </Text>
             <FormInput
-              label="API-ключ Claude (Anthropic)"
+              label="Ключ доступа к ИИ"
               secureTextEntry
               value={apiKeyInput}
               onChangeText={setApiKeyInput}
@@ -277,7 +282,7 @@ export function SettingsScreen() {
             <AppButton title="Сохранить ключ" onPress={handleSaveApiKey} />
             <View style={{ height: spacing.sm }} />
             <AppButton
-              title="Получить ключ на console.anthropic.com"
+              title="Получить ключ доступа"
               variant="outline"
               onPress={() => Linking.openURL('https://console.anthropic.com/settings/keys')}
             />

@@ -32,6 +32,14 @@ import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'deposits' | 'accounts' | 'investments' | 'goals' | 'cashback';
 
+const SEGMENT_HINTS: Record<Segment, string> = {
+  goals: 'Копите на конкретную покупку с дедлайном — прогресс-бар покажет, сколько уже собрано',
+  deposits: 'Банковские вклады с фиксированным сроком (дата открытия и закрытия) и процентной ставкой',
+  accounts: 'Накопительные счета без срока — остаток и проценты, начисляются автоматически каждый месяц',
+  investments: 'Акции, облигации, ПИФ, крипта — количество, цена, доходность, дивиденды и купоны',
+  cashback: 'Ваши карты с процентом кэшбэка — сколько уже накоплено баллов/рублей',
+};
+
 const CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR'];
 
 const ASSET_TYPES: AssetType[] = ['stock', 'bond', 'crypto', 'fund'];
@@ -318,6 +326,7 @@ export function SavingsScreen() {
           { label: 'Кэшбэк', value: 'cashback' },
         ]}
       />
+      <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: spacing.sm }}>{SEGMENT_HINTS[segment]}</Text>
 
       {segment === 'goals' && (
         <>

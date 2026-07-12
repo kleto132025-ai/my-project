@@ -38,6 +38,14 @@ import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'credits' | 'mortgage' | 'calendar' | 'debts' | 'insurance';
 
+const SEGMENT_HINTS: Record<Segment, string> = {
+  credits: 'Потребительские и другие кредиты — остаток, платежи, график погашения',
+  mortgage: 'Ипотека: то же самое плюс стоимость объекта, ремонт и прирост капитала',
+  calendar: 'Календарь всех предстоящих списаний — по кредитам, долгам, страховкам и платежам',
+  debts: 'Кто должен вам и кому должны вы — без процентов, просто учёт долгов',
+  insurance: 'Страховые полисы (ОСАГО, страхование жизни/ипотеки) и даты их окончания',
+};
+
 const CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR'];
 
 export function CreditsScreen() {
@@ -634,6 +642,7 @@ export function CreditsScreen() {
           { label: 'Страховка', value: 'insurance' },
         ]}
       />
+      <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: spacing.sm }}>{SEGMENT_HINTS[segment]}</Text>
 
       {segment === 'credits' && (
         <>
