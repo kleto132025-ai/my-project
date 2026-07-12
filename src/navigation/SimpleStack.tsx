@@ -4,6 +4,7 @@ import { DrawerToggleButton } from '@react-navigation/drawer';
 import { useTheme } from '../theme';
 import { headerScreenOptions } from './screenOptions';
 import { withErrorBoundary } from '../components/withErrorBoundary';
+import { HomeButton } from '../components/HomeButton';
 
 const Stack = createNativeStackNavigator();
 
@@ -36,6 +37,11 @@ export function createSimpleStack({
           options={{
             title,
             headerLeft: showDrawerToggle ? () => <DrawerToggleButton tintColor="#FFFFFF" /> : undefined,
+            // Экраны бокового меню — корень своего отдельного стека, системной кнопки "назад"
+            // у них нет (даже у "Уведомлений", у которых нет и открывающего меню значка) —
+            // без явной кнопки "На главную" единственный путь назад — свайп/аппаратная кнопка
+            // назад, что не всегда очевидно.
+            headerRight: () => <HomeButton />,
           }}
         />
       </Stack.Navigator>
