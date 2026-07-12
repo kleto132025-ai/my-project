@@ -10,6 +10,7 @@ import {
   monthsElapsed,
   calculateMortgageProfit,
   simulateAmortization,
+  nextMonthlyOccurrence,
 } from '../utils/calculations';
 import type { Transaction } from '../types';
 
@@ -217,5 +218,29 @@ describe('simulateAmortization', () => {
       { date: new Date('2026-01-15'), amount: 1_000_000 },
     ]);
     expect(result.remaining).toBe(0);
+  });
+});
+
+describe('nextMonthlyOccurrence', () => {
+  it('returns this month\'s date when the day has not passed yet', () => {
+    const from = new Date('2026-06-10');
+    const result = nextMonthlyOccurrence(20, from);
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(5);
+    expect(result.getDate()).toBe(20);
+  });
+
+  it('rolls over to next month when the day has already passed', () => {
+    const from = new Date('2026-06-25');
+    const result = nextMonthlyOccurrence(20, from);
+    expect(result.getMonth()).toBe(6);
+    expect(result.getDate()).toBe(20);
+  });
+
+  it('treats the day itself as not yet passed (inclusive)', () => {
+    const from = new Date('2026-06-20');
+    const result = nextMonthlyOccurrence(20, from);
+    expect(result.getMonth()).toBe(5);
+    expect(result.getDate()).toBe(20);
   });
 });

@@ -1,7 +1,13 @@
 import { useMemo } from 'react';
 import { useFinanceStore } from '../store/financeStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { calculateBalance, calculateForecast, calculateMortgageProfit, simulateAmortization } from '../utils/calculations';
+import {
+  calculateBalance,
+  calculateForecast,
+  calculateMortgageProfit,
+  simulateAmortization,
+  nextMonthlyOccurrence,
+} from '../utils/calculations';
 import { normalizeTransactionsToCurrency, convertAmount } from '../utils/currency';
 import { withComputedSpent } from '../utils/budget';
 import type { BudgetLimit, Transaction, Currency } from '../types';
@@ -240,4 +246,73 @@ export function useMortgageAssets(): MortgageAsset[] {
         };
       });
   }, [credits, creditRepayments, insurancePolicies, currency, rates]);
+}
+
+export interface UpcomingPayment {
+  id: string;
+  date: Date;
+  label: string;
+  amount: number;
+}
+
+// Что реально спишется в ближайшие `days` дней — единая хронологическая лента для карточки
+// "Ближайшие платежи" на главном экране. Собирает плановые платежи по кредитам/ипотекам
+// (только пока остаток > 0 — у погашенного кредита следующего платежа не бывает), напоминания
+// по долгам друзьям, страховые взносы (годовые — по дате окончания полиса, ежемесячные — по
+// ближайшему числу месяца) и активные регулярные платежи. Ежемесячные события (страховка,
+// регулярные платежи) хранят только "число месяца", поэтому их дата вычисляется через
+// nextMonthlyOccurrence — то же само число, что уже прошло в этом месяце, откладывается на
+// следующий, а не показывается как просроченное.
+export function useUpcomingPayments(days = 7): UpcomingPayment[] {
+  const credits = useFinanceStore((s) => s.credits);
+  const friendDebts = useFinanceStore((s) => s.friendDebts);
+  const insurancePolicies = useFinanceStore((s) => s.insurancePolicies);
+  const regularPayments = useFinanceStore((s) => s.regularPayments);
+  const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
+
+  return useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const rangeEnd = new Date(startOfToday);
+    rangeEnd.setDate(rangeEnd.getDate() + days);
+    const inRange = (d: Date) => d.getTime() >= startOfToday.getTime() && d.getTime() < rangeEnd.getTime();
+
+    const events: UpcomingPayment[] = [];
+
+    credits
+      .filter((c) => c.remaining > 0 && inRange(c.nextPaymentDate))
+      .forEach((c) => {
+        events.push({
+          id: `credit-${c.id}`,
+          date: c.nextPaymentDate,
+          label: `${c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'} «${c.name}»`,
+          amount: convertAmount(c.monthlyPayment, c.currency, currency, rates),
+        });
+      });
+
+    friendDebts
+      .filter((d) => !d.isPaid && d.reminderDate && inRange(d.reminderDate))
+      .forEach((d) => {
+        events.push({ id: `debt-${d.id}`, date: d.reminderDate as Date, label: `Долг: ${d.personName}`, amount: d.amount });
+      });
+
+    insurancePolicies.forEach((p) => {
+      const date = p.paymentFrequency === 'monthly' ? nextMonthlyOccurrence(p.endDate.getDate(), startOfToday) : p.endDate;
+      if (inRange(date)) {
+        events.push({ id: `insurance-${p.id}`, date, label: `Страховка: ${p.type}`, amount: p.amount });
+      }
+    });
+
+    regularPayments
+      .filter((p) => p.isActive)
+      .forEach((p) => {
+        const date = nextMonthlyOccurrence(p.dayOfMonth, startOfToday);
+        if (inRange(date)) {
+          events.push({ id: `regular-${p.id}`, date, label: p.name, amount: p.amount });
+        }
+      });
+
+    return events.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [credits, friendDebts, insurancePolicies, regularPayments, currency, rates, days]);
 }

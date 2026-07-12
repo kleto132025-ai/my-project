@@ -21,6 +21,7 @@ import {
   useInvestmentsSummary,
   useNetWorth,
   useMortgageAssets,
+  useUpcomingPayments,
 } from '../../hooks/useFinancials';
 import type { Transaction } from '../../types';
 
@@ -42,6 +43,7 @@ export function DashboardScreen() {
   const investmentsSummary = useInvestmentsSummary();
   const netWorth = useNetWorth();
   const mortgageAssets = useMortgageAssets();
+  const upcomingPayments = useUpcomingPayments(7);
 
   const isNegative = freeFunds < 0;
 
@@ -109,6 +111,21 @@ export function DashboardScreen() {
           </View>
         </View>
       </Card>
+
+      {upcomingPayments.length > 0 && (
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>На этой неделе</Text>
+          {upcomingPayments.map((p) => (
+            <View key={p.id} style={styles.debtRow}>
+              <View style={styles.upcomingLabelRow}>
+                <Text style={{ color: theme.text }}>{p.label}</Text>
+                <Text style={{ color: theme.textMuted, fontSize: 11 }}>{p.date.toLocaleDateString('ru-RU')}</Text>
+              </View>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(p.amount, currency)}</Text>
+            </View>
+          ))}
+        </Card>
+      )}
 
       {debtSummary.totalRemaining > 0 && (
         <Card>
@@ -295,6 +312,7 @@ const styles = StyleSheet.create({
   categoryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
   debtRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   debtLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  upcomingLabelRow: { gap: 2 },
   debtTotalRow: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 4, paddingTop: spacing.sm },
   mortgageAssetBlock: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.sm, paddingTop: spacing.sm },
 });

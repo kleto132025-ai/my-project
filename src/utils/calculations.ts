@@ -139,6 +139,19 @@ export function calculateMortgageProfit(
   return { netProfit, netProfitPercent, saleProceeds };
 }
 
+// Ближайшая дата с указанным числом месяца, не раньше `from` (включительно): если это число
+// уже прошло в текущем месяце — берётся следующий месяц. Используется для регулярных платежей
+// и ежемесячных страховых взносов, у которых хранится только "число месяца", а не точная дата.
+// Если dayOfMonth больше, чем дней в конкретном месяце (например, 31), Date сам перетекает
+// в начало следующего месяца — это осознанно принятое упрощение, а не отдельно обрабатывается.
+export function nextMonthlyOccurrence(dayOfMonth: number, from: Date): Date {
+  const candidate = new Date(from.getFullYear(), from.getMonth(), dayOfMonth);
+  if (candidate.getTime() < new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime()) {
+    candidate.setMonth(candidate.getMonth() + 1);
+  }
+  return candidate;
+}
+
 export interface AmortizationSimulation {
   remaining: number;
   totalInterestPaid: number;
