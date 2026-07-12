@@ -321,12 +321,12 @@ export async function listInvestments(): Promise<Investment[]> {
 export async function upsertInvestment(i: Investment): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO investments (id, name, assetType, quantity, purchasePrice, currentPrice, currency)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO investments (id, name, assetType, quantity, purchasePrice, currentPrice, currency, moexTicker)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name, assetType=excluded.assetType,
        quantity=excluded.quantity, purchasePrice=excluded.purchasePrice, currentPrice=excluded.currentPrice,
-       currency=excluded.currency;`,
-    [i.id, i.name, i.assetType, i.quantity, i.purchasePrice, i.currentPrice, i.currency]
+       currency=excluded.currency, moexTicker=excluded.moexTicker;`,
+    [i.id, i.name, i.assetType, i.quantity, i.purchasePrice, i.currentPrice, i.currency, i.moexTicker ?? null]
   );
 }
 

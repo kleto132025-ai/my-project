@@ -92,7 +92,8 @@ CREATE TABLE IF NOT EXISTS investments (
   quantity REAL NOT NULL,
   purchasePrice REAL NOT NULL,
   currentPrice REAL NOT NULL,
-  currency TEXT NOT NULL DEFAULT 'RUB'
+  currency TEXT NOT NULL DEFAULT 'RUB',
+  moexTicker TEXT
 );
 
 -- Дивиденды по акциям / купоны по облигациям — история выплат по конкретному активу.

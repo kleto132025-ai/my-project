@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, Switch, Alert } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
 import { CardActions } from '../../components/CardActions';
@@ -17,6 +17,7 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
 import { convertAmount } from '../../utils/currency';
 import { confirmDelete } from '../../utils/confirm';
+import { fetchMoexPrice, MoexApiError } from '../../utils/moex';
 import type {
   AssetType,
   Goal,
@@ -88,6 +89,8 @@ export function SavingsScreen() {
   const [quantity, setQuantity] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [currentPrice, setCurrentPrice] = useState('');
+  const [moexTicker, setMoexTicker] = useState('');
+  const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
   const [deadline, setDeadline] = useState(new Date(Date.now() + 180 * 24 * 3600 * 1000));
   const [isShared, setIsShared] = useState(false);
   const [partnerName, setPartnerName] = useState('');
@@ -100,6 +103,7 @@ export function SavingsScreen() {
     setQuantity('');
     setPurchasePrice('');
     setCurrentPrice('');
+    setMoexTicker('');
     setIsShared(false);
     setPartnerName('');
     setEntryCurrency(currency);
@@ -143,6 +147,7 @@ export function SavingsScreen() {
     setQuantity(String(i.quantity));
     setPurchasePrice(String(i.purchasePrice));
     setCurrentPrice(String(i.currentPrice));
+    setMoexTicker(i.moexTicker ?? '');
     setEntryCurrency(i.currency);
     setEditingId(i.id);
     setShowForm(true);
@@ -195,9 +200,49 @@ export function SavingsScreen() {
       purchasePrice: parseLocaleNumber(purchasePrice || '0'),
       currentPrice: parseLocaleNumber(currentPrice || purchasePrice || '0'),
       currency: entryCurrency,
+      moexTicker: moexTicker.trim() ? moexTicker.trim().toUpperCase() : undefined,
     } as Investment);
     resetForm();
   };
+
+  // Подтягивает текущую цену актива с Мосбиржи по тикеру (публичный ISS API, без ключа) —
+  // чтобы «Текущую цену» не нужно было каждый раз обновлять вручную. Ошибки (нет интернета,
+  // тикер не найден) тихо игнорируются при автообновлении при открытии вкладки и показываются
+  // явно только при нажатии кнопки «Обновить цену» на конкретном активе.
+  const refreshMoexPrice = useCallback(
+    async (investment: Investment, { silent }: { silent: boolean }) => {
+      if (!investment.moexTicker) return;
+      setRefreshingIds((prev) => new Set(prev).add(investment.id));
+      try {
+        const price = await fetchMoexPrice(investment.moexTicker, investment.assetType);
+        await saveInvestment({ ...investment, currentPrice: price });
+      } catch (e) {
+        if (!silent) {
+          const message = e instanceof MoexApiError ? e.message : 'Не удалось получить цену с Мосбиржи';
+          Alert.alert('Не удалось обновить цену', message);
+        }
+      } finally {
+        setRefreshingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(investment.id);
+          return next;
+        });
+      }
+    },
+    [saveInvestment]
+  );
+
+  // Автообновление при каждом открытии вкладки «Инвестиции» — так цены, привязанные к
+  // тикеру, обычно не приходится обновлять вручную вообще. Список активов на момент
+  // открытия вкладки берётся напрямую (без изменения зависимостей эффекта), чтобы
+  // повторное сохранение цены не запускало эффект по кругу.
+  useEffect(() => {
+    if (segment !== 'investments') return;
+    investments.filter((i) => i.moexTicker).forEach((i) => refreshMoexPrice(i, { silent: true }));
+    // Намеренно зависит только от segment, а не от investments/refreshMoexPrice: обновление
+    // цены сохраняет актив заново, что меняло бы ссылку на investments и перезапускало бы
+    // эффект по кругу при каждом открытии вкладки.
+  }, [segment]);
 
   const handleAddPayout = async (investmentId: string) => {
     const payAmount = parseLocaleNumber(payoutAmount);
@@ -449,6 +494,7 @@ export function SavingsScreen() {
                 .sort((a, b) => b.date.getTime() - a.date.getTime());
               const totalPayouts = payouts.reduce((sum, p) => sum + p.amount, 0);
               const fmt = (a: number) => formatCurrency(convertAmount(a, i.currency, currency, rates), currency);
+              const isRefreshing = refreshingIds.has(i.id);
               return (
                 <Card key={i.id}>
                   <View style={styles.rowBetween}>
@@ -469,6 +515,19 @@ export function SavingsScreen() {
                     <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
                       {payoutLabel} всего: {fmt(totalPayouts)}
                     </Text>
+                  )}
+                  {i.moexTicker && (
+                    <>
+                      <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 4 }}>
+                        Тикер Мосбиржи: {i.moexTicker}
+                      </Text>
+                      <AppButton
+                        title={isRefreshing ? 'Обновление…' : 'Обновить цену с Мосбиржи'}
+                        variant="outline"
+                        disabled={isRefreshing}
+                        onPress={() => refreshMoexPrice(i, { silent: false })}
+                      />
+                    </>
                   )}
                   <AppButton
                     title={isExpanded ? 'Скрыть выплаты' : `${payoutLabel}`}
@@ -556,6 +615,21 @@ export function SavingsScreen() {
                 value={currentPrice}
                 onChangeText={setCurrentPrice}
               />
+              {assetType !== 'crypto' && (
+                <>
+                  <FormInput
+                    label="Тикер Мосбиржи (необязательно)"
+                    value={moexTicker}
+                    onChangeText={setMoexTicker}
+                    placeholder="SBER"
+                    autoCapitalize="characters"
+                  />
+                  <Text style={{ color: theme.textMuted, fontSize: 11, marginBottom: spacing.sm }}>
+                    Если указать тикер — «Текущая цена» будет подтягиваться с Мосбиржи автоматически
+                    при открытии этой вкладки, вручную вводить её больше не придётся.
+                  </Text>
+                </>
+              )}
               <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить актив'} onPress={handleAddInvestment} />
               <View style={{ height: spacing.sm }} />
               <AppButton title="Отмена" variant="outline" onPress={resetForm} />

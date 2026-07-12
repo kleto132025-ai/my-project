@@ -42,6 +42,16 @@ describe('reviveBackupData', () => {
     expect(data.deposits?.[0].currency).toBe('USD');
   });
 
+  it('preserves an investment\'s MOEX ticker through revival', () => {
+    const raw = {
+      investments: [
+        { id: 'i1', name: 'Сбербанк', assetType: 'stock', quantity: 10, purchasePrice: 200, currentPrice: 285, currency: 'RUB', moexTicker: 'SBER' },
+      ],
+    };
+    const data = reviveBackupData(raw);
+    expect(data.investments?.[0].moexTicker).toBe('SBER');
+  });
+
   it('ignores fields that are not arrays', () => {
     const data = reviveBackupData({ transactions: 'oops', goals: null });
     expect(data.transactions).toBeUndefined();

@@ -126,6 +126,8 @@ export interface Investment {
   purchasePrice: number;
   currentPrice: number;
   currency: Currency;
+  /** Тикер на Мосбирже (например SBER) — если задан, «Текущая цена» можно подтянуть автоматически. */
+  moexTicker?: string;
 }
 
 // Дивиденды (для акций) или купоны (для облигаций) — тип выплаты не хранится отдельно,
