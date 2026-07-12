@@ -336,6 +336,12 @@ function daysInMonth(year: number, month: number): number {
 // календарном месяце, будто в остальные месяцы их не будет вовсе.
 const MONTH_WINDOW = [-1, 0, 1, 2];
 
+// То же самое для кредитов/ипотек, но без "назад": nextPaymentDate — это уже ближайший
+// НЕОПЛАЧЕННЫЙ платёж, поэтому предыдущие месяцы для этого кредита уже погашены (и отражены в
+// истории погашений, а не в календаре будущих обязательств) — отмечаем только начиная с месяца
+// nextPaymentDate и на пару месяцев вперёд, чтобы платёж был виден как повторяющийся, а не разово.
+const CREDIT_MONTH_WINDOW = [0, 1, 2];
+
 // Карта "дата → какие обязательства на неё приходятся", общая для календаря на главном экране
 // и календаря внутри "Кредиты и платежи" — раньше эта логика была продублирована прямо в
 // CreditsScreen.tsx и рисковала разойтись между двумя местами. Платежи с окном оплаты
@@ -362,12 +368,19 @@ export function useObligationEvents(): Map<string, ObligationEvent[]> {
     };
     const now = new Date();
 
-    credits.forEach((c) =>
-      add(c.nextPaymentDate, {
-        label: `${c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'} «${c.name}»`,
-        amount: convertAmount(c.monthlyPayment, c.currency, currency, rates),
-      })
-    );
+    credits
+      .filter((c) => c.remaining > 0)
+      .forEach((c) => {
+        const label = `${c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'} «${c.name}»`;
+        const amount = convertAmount(c.monthlyPayment, c.currency, currency, rates);
+        const day = c.nextPaymentDate.getDate();
+        CREDIT_MONTH_WINDOW.forEach((offset) => {
+          const year = c.nextPaymentDate.getFullYear();
+          const month = c.nextPaymentDate.getMonth() + offset;
+          const clampedDay = Math.min(day, daysInMonth(year, month));
+          add(new Date(year, month, clampedDay), { label, amount });
+        });
+      });
     friendDebts.forEach((d) => d.reminderDate && add(d.reminderDate, { label: `Долг: ${d.personName}`, amount: d.amount }));
     insurancePolicies.forEach((p) => {
       if (p.paymentFrequency === 'monthly') {

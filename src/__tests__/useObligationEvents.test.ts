@@ -125,4 +125,33 @@ describe('useObligationEvents', () => {
     expect(result.current.get(dateKey(new Date(2026, 6, 15)))).toHaveLength(1);
     expect(result.current.get(dateKey(new Date(2026, 7, 15)))).toHaveLength(1);
   });
+
+  it('marks a credit payment as recurring in the following two months, not just nextPaymentDate', async () => {
+    useFinanceStore.setState({ credits: [makeCredit({ nextPaymentDate: new Date('2026-06-15') })] });
+    const { result } = await renderHook(() => useObligationEvents());
+
+    expect(result.current.get(dateKey(new Date(2026, 5, 15)))).toEqual([{ label: 'Кредит «Автокредит»', amount: 5000 }]);
+    expect(result.current.get(dateKey(new Date(2026, 6, 15)))).toEqual([{ label: 'Кредит «Автокредит»', amount: 5000 }]);
+    expect(result.current.get(dateKey(new Date(2026, 7, 15)))).toEqual([{ label: 'Кредит «Автокредит»', amount: 5000 }]);
+  });
+
+  it('does not mark a credit payment in the month before nextPaymentDate (already paid)', async () => {
+    useFinanceStore.setState({ credits: [makeCredit({ nextPaymentDate: new Date('2026-06-15') })] });
+    const { result } = await renderHook(() => useObligationEvents());
+    expect(result.current.get(dateKey(new Date(2026, 4, 15)))).toBeUndefined();
+  });
+
+  it('clamps a recurring credit payment day to the days in each month', async () => {
+    useFinanceStore.setState({ credits: [makeCredit({ nextPaymentDate: new Date('2026-01-31') })] });
+    const { result } = await renderHook(() => useObligationEvents());
+    // February 2026 has 28 days — the 31st must clamp, not roll into March.
+    expect(result.current.get(dateKey(new Date(2026, 1, 28)))).toHaveLength(1);
+    expect(result.current.get(dateKey(new Date(2026, 2, 3)))).toBeUndefined();
+  });
+
+  it('excludes a fully repaid credit from the calendar entirely', async () => {
+    useFinanceStore.setState({ credits: [makeCredit({ remaining: 0 })] });
+    const { result } = await renderHook(() => useObligationEvents());
+    expect(result.current.size).toBe(0);
+  });
 });
