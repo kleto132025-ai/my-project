@@ -15,7 +15,12 @@ import { spacing } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatNumber } from '../../utils/format';
-import { calculateAmortizationStep, calculateMonthlyPayment, calculateMortgageProfit } from '../../utils/calculations';
+import {
+  calculateAmortizationStep,
+  calculateMonthlyPayment,
+  calculateMortgageProfit,
+  simulateAmortization,
+} from '../../utils/calculations';
 import { schedulePaymentReminders, scheduleInsuranceReminder, requestNotificationPermissions } from '../../utils/notifications';
 import { confirmDelete } from '../../utils/confirm';
 import type {
@@ -313,11 +318,21 @@ export function CreditsScreen() {
       .sort((a, b) => b.date.getTime() - a.date.getTime());
     const fullRepayment = history.find((r) => r.type === 'full');
 
-    // Проценты, выплаченные на сегодня — сумма разницы между внесённым платежом и той его
-    // частью, что реально ушла в основной долг (principalPortion). Для чистой прибыли по
-    // объекту берём именно проценты, а не весь платёж, т.к. основной долг просто переходит
-    // из наличных в собственный капитал и сам по себе не является расходом.
-    const totalInterestPaid = history.reduce((sum, r) => sum + (r.amount - r.principalPortion), 0);
+    // Проценты, выплаченные на сегодня, считаются не по фактически внесённым в приложение
+    // платежам (для кредита, взятому много лет назад, пришлось бы вручную вносить каждый
+    // прошедший месяц), а симуляцией амортизации от даты выдачи до сегодня по сумме платежа
+    // и ставке — с учётом всех зафиксированных досрочных погашений в их реальные даты.
+    const earlyRepaymentsForSimulation = history
+      .filter((r) => r.type !== 'regular')
+      .map((r) => ({ date: r.date, amount: r.amount }));
+    const totalInterestPaid = simulateAmortization(
+      c.amount,
+      c.rate,
+      c.monthlyPayment,
+      c.startDate,
+      new Date(),
+      earlyRepaymentsForSimulation
+    ).totalInterestPaid;
     const linkedInsurance = insurancePolicies.filter((p) => p.creditId === c.id);
     const totalInsuranceCost = linkedInsurance.reduce((sum, p) => sum + p.amount, 0);
     const mortgageProfit =

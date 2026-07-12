@@ -138,3 +138,57 @@ export function calculateMortgageProfit(
   const saleProceeds = currentValue - remaining;
   return { netProfit, netProfitPercent, saleProceeds };
 }
+
+export interface AmortizationSimulation {
+  remaining: number;
+  totalInterestPaid: number;
+  totalPrincipalPaid: number;
+}
+
+// Симулирует помесячные платежи от даты выдачи кредита до сегодняшнего дня по фиксированной
+// сумме платежа и ставке, накладывая уже зафиксированные досрочные погашения в их даты.
+// Нужна для того, чтобы посчитать сумму выплаченных процентов "на сегодня" у кредита,
+// взятого много лет назад, без необходимости вручную вносить каждый прошедший ежемесячный
+// платёж — по факту берётся дата выдачи, ставка, сумма платежа и список досрочных погашений.
+export function simulateAmortization(
+  amount: number,
+  rate: number,
+  monthlyPayment: number,
+  startDate: Date,
+  asOfDate: Date,
+  earlyRepayments: { date: Date; amount: number }[]
+): AmortizationSimulation {
+  let balance = amount;
+  let totalInterestPaid = 0;
+  let totalPrincipalPaid = 0;
+
+  const sortedEarly = [...earlyRepayments].sort((a, b) => a.date.getTime() - b.date.getTime());
+  let earlyIndex = 0;
+  const applyDueEarlyRepayments = (upTo: Date) => {
+    while (balance > 0 && earlyIndex < sortedEarly.length && sortedEarly[earlyIndex].date.getTime() <= upTo.getTime()) {
+      const extra = Math.min(sortedEarly[earlyIndex].amount, balance);
+      balance = Math.max(Math.round((balance - extra) * 100) / 100, 0);
+      totalPrincipalPaid += extra;
+      earlyIndex++;
+    }
+  };
+
+  const cursor = new Date(startDate);
+  while (balance > 0) {
+    cursor.setMonth(cursor.getMonth() + 1);
+    if (cursor.getTime() > asOfDate.getTime()) break;
+    applyDueEarlyRepayments(cursor);
+    if (balance <= 0) break;
+    const step = calculateAmortizationStep(balance, rate, monthlyPayment);
+    totalInterestPaid += step.interestPortion;
+    totalPrincipalPaid += step.principalPortion;
+    balance = step.newRemaining;
+  }
+  applyDueEarlyRepayments(asOfDate);
+
+  return {
+    remaining: balance,
+    totalInterestPaid: Math.round(totalInterestPaid * 100) / 100,
+    totalPrincipalPaid: Math.round(totalPrincipalPaid * 100) / 100,
+  };
+}

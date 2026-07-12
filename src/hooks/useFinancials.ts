@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useFinanceStore } from '../store/financeStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { calculateBalance, calculateForecast, calculateMortgageProfit } from '../utils/calculations';
+import { calculateBalance, calculateForecast, calculateMortgageProfit, simulateAmortization } from '../utils/calculations';
 import { normalizeTransactionsToCurrency } from '../utils/currency';
 import { withComputedSpent } from '../utils/budget';
 import type { BudgetLimit, Transaction } from '../types';
@@ -175,9 +175,20 @@ export function useMortgageAssets(): MortgageAsset[] {
     return credits
       .filter((c) => c.kind === 'mortgage' && c.currentValue != null)
       .map((c) => {
-        const totalInterestPaid = creditRepayments
-          .filter((r) => r.creditId === c.id)
-          .reduce((sum, r) => sum + (r.amount - r.principalPortion), 0);
+        // Проценты симулируются от даты выдачи (см. calculateMortgageProfit в CreditsScreen.tsx
+        // для подробного объяснения) — так кредиту, взятому много лет назад, не нужно вручную
+        // вносить каждый прошедший ежемесячный платёж, только досрочные погашения, если были.
+        const earlyRepaymentsForSimulation = creditRepayments
+          .filter((r) => r.creditId === c.id && r.type !== 'regular')
+          .map((r) => ({ date: r.date, amount: r.amount }));
+        const totalInterestPaid = simulateAmortization(
+          c.amount,
+          c.rate,
+          c.monthlyPayment,
+          c.startDate,
+          new Date(),
+          earlyRepaymentsForSimulation
+        ).totalInterestPaid;
         const totalInsuranceCost = insurancePolicies
           .filter((p) => p.creditId === c.id)
           .reduce((sum, p) => sum + p.amount, 0);

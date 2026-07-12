@@ -9,6 +9,7 @@ import {
   calculateMonthlyInterest,
   monthsElapsed,
   calculateMortgageProfit,
+  simulateAmortization,
 } from '../utils/calculations';
 import type { Transaction } from '../types';
 
@@ -169,5 +170,52 @@ describe('calculateMortgageProfit', () => {
   it('handles a zero purchase price without dividing by zero', () => {
     const result = calculateMortgageProfit(0, 100, 0, 0, 0, 0);
     expect(result.netProfitPercent).toBe(0);
+  });
+});
+
+describe('simulateAmortization', () => {
+  it('matches calculateLoanRemaining when there are no early repayments', () => {
+    const amount = 300000;
+    const rate = 15;
+    const termMonths = 24;
+    const monthlyPayment = calculateMonthlyPayment(amount, rate, termMonths);
+    const startDate = new Date('2024-01-01');
+    const asOfDate = new Date('2025-01-01'); // ровно 12 месяцев спустя
+
+    const result = simulateAmortization(amount, rate, monthlyPayment, startDate, asOfDate, []);
+    const expectedRemaining = calculateLoanRemaining(amount, rate, 12, termMonths);
+    expect(result.remaining).toBeCloseTo(expectedRemaining, 0);
+    expect(result.totalInterestPaid).toBeGreaterThan(0);
+  });
+
+  it('returns zero interest and full amount when nothing has elapsed yet', () => {
+    const startDate = new Date('2026-01-01');
+    const result = simulateAmortization(300000, 15, 14545.99, startDate, startDate, []);
+    expect(result.remaining).toBe(300000);
+    expect(result.totalInterestPaid).toBe(0);
+  });
+
+  it('applies an early repayment on top of the regular schedule, reducing remaining balance', () => {
+    const amount = 300000;
+    const rate = 15;
+    const monthlyPayment = calculateMonthlyPayment(amount, rate, 24);
+    const startDate = new Date('2024-01-01');
+    const asOfDate = new Date('2025-01-01');
+
+    const withoutEarly = simulateAmortization(amount, rate, monthlyPayment, startDate, asOfDate, []);
+    const withEarly = simulateAmortization(amount, rate, monthlyPayment, startDate, asOfDate, [
+      { date: new Date('2024-06-15'), amount: 50000 },
+    ]);
+    expect(withEarly.remaining).toBeLessThan(withoutEarly.remaining);
+    expect(withEarly.totalInterestPaid).toBeLessThan(withoutEarly.totalInterestPaid);
+  });
+
+  it('never lets the balance go negative when an early repayment exceeds it', () => {
+    const startDate = new Date('2026-01-01');
+    const asOfDate = new Date('2026-03-01');
+    const result = simulateAmortization(1000, 12, 500, startDate, asOfDate, [
+      { date: new Date('2026-01-15'), amount: 1_000_000 },
+    ]);
+    expect(result.remaining).toBe(0);
   });
 });
