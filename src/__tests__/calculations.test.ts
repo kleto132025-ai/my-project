@@ -6,6 +6,8 @@ import {
   calculateMonthlyPayment,
   calculateTaxDeduction,
   calculateAmortizationStep,
+  calculateMonthlyInterest,
+  monthsElapsed,
 } from '../utils/calculations';
 import type { Transaction } from '../types';
 
@@ -120,5 +122,30 @@ describe('calculateAmortizationStep', () => {
     expect(step.interestPortion).toBe(0);
     expect(step.principalPortion).toBe(400);
     expect(step.newRemaining).toBe(600);
+  });
+});
+
+describe('calculateMonthlyInterest', () => {
+  it('computes one month of interest on the balance', () => {
+    expect(calculateMonthlyInterest(120000, 12)).toBe(1200);
+  });
+
+  it('returns 0 for a zero balance or zero rate', () => {
+    expect(calculateMonthlyInterest(0, 10)).toBe(0);
+    expect(calculateMonthlyInterest(1000, 0)).toBe(0);
+  });
+});
+
+describe('monthsElapsed', () => {
+  it('counts full calendar months between two dates', () => {
+    expect(monthsElapsed(new Date('2026-01-15'), new Date('2026-04-10'))).toBe(3);
+  });
+
+  it('returns 0 within the same month', () => {
+    expect(monthsElapsed(new Date('2026-06-01'), new Date('2026-06-28'))).toBe(0);
+  });
+
+  it('never returns a negative number', () => {
+    expect(monthsElapsed(new Date('2026-06-01'), new Date('2026-01-01'))).toBe(0);
   });
 });

@@ -90,6 +90,24 @@ CREATE TABLE IF NOT EXISTS investments (
   currentPrice REAL NOT NULL
 );
 
+-- Накопительный счёт: в отличие от вклада (deposits), без даты закрытия — остаток может
+-- меняться, а проценты по ставке rate начисляются на остаток раз в календарный месяц
+-- (см. financeStore.accrueSavingsInterest). lastAccrualDate — по какую дату уже начислено.
+CREATE TABLE IF NOT EXISTS savings_accounts (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  balance REAL NOT NULL,
+  rate REAL NOT NULL,
+  lastAccrualDate TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS savings_accruals (
+  id TEXT PRIMARY KEY NOT NULL,
+  accountId TEXT NOT NULL,
+  date TEXT NOT NULL,
+  amount REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS friend_debts (
   id TEXT PRIMARY KEY NOT NULL,
   personName TEXT NOT NULL,

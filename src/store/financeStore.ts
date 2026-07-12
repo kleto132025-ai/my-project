@@ -8,6 +8,8 @@ import type {
   BudgetLimit,
   RegularPayment,
   Deposit,
+  SavingsAccount,
+  SavingsAccrual,
   Investment,
   FriendDebt,
   InsurancePolicy,
@@ -21,7 +23,7 @@ import type {
 import * as repo from '../database/repository';
 import { seedDemoDataIfNeeded, SEED_FLAG_KEY } from '../database/seed';
 import { setMeta } from '../database/client';
-import { calculateGoalProgress, calculateAmortizationStep } from '../utils/calculations';
+import { calculateGoalProgress, calculateAmortizationStep, calculateMonthlyInterest, monthsElapsed } from '../utils/calculations';
 
 interface FinanceState {
   isLoaded: boolean;
@@ -32,6 +34,8 @@ interface FinanceState {
   budgetLimits: BudgetLimit[];
   regularPayments: RegularPayment[];
   deposits: Deposit[];
+  savingsAccounts: SavingsAccount[];
+  savingsAccruals: SavingsAccrual[];
   investments: Investment[];
   friendDebts: FriendDebt[];
   insurancePolicies: InsurancePolicy[];
@@ -78,6 +82,15 @@ interface FinanceState {
   saveDeposit: (d: Deposit | Omit<Deposit, 'id'>) => Promise<void>;
   removeDeposit: (id: string) => Promise<void>;
 
+  saveSavingsAccount: (a: SavingsAccount | Omit<SavingsAccount, 'id'>) => Promise<void>;
+  removeSavingsAccount: (id: string) => Promise<void>;
+  /**
+   * Начисляет проценты по всем накопительным счетам за все ещё не учтённые календарные
+   * месяцы (может начислить сразу за несколько месяцев, если приложение долго не открывали).
+   * Вызывается автоматически при каждой загрузке данных.
+   */
+  accrueSavingsInterest: () => Promise<void>;
+
   saveInvestment: (i: Investment | Omit<Investment, 'id'>) => Promise<void>;
   removeInvestment: (id: string) => Promise<void>;
 
@@ -119,6 +132,8 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   budgetLimits: [],
   regularPayments: [],
   deposits: [],
+  savingsAccounts: [],
+  savingsAccruals: [],
   investments: [],
   friendDebts: [],
   insurancePolicies: [],
@@ -132,21 +147,25 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   loadAll: async () => {
     await seedDemoDataIfNeeded();
     const [
-      transactions, goals, credits, creditRepayments, budgetLimits, regularPayments, deposits, investments,
+      transactions, goals, credits, creditRepayments, budgetLimits, regularPayments, deposits,
+      savingsAccounts, savingsAccruals, investments,
       friendDebts, insurancePolicies, wishlistItems, notifications, cashbackCards, achievements,
       recurringTemplates, profile,
     ] = await Promise.all([
       repo.listTransactions(), repo.listGoals(), repo.listCredits(), repo.listCreditRepayments(), repo.listBudgetLimits(),
-      repo.listRegularPayments(), repo.listDeposits(), repo.listInvestments(),
+      repo.listRegularPayments(), repo.listDeposits(), repo.listSavingsAccounts(), repo.listSavingsAccruals(),
+      repo.listInvestments(),
       repo.listFriendDebts(), repo.listInsurancePolicies(), repo.listWishlistItems(),
       repo.listNotifications(), repo.listCashbackCards(), repo.listAchievements(),
       repo.listRecurringTemplates(), repo.getUserProfile(),
     ]);
     set({
-      transactions, goals, credits, creditRepayments, budgetLimits, regularPayments, deposits, investments,
+      transactions, goals, credits, creditRepayments, budgetLimits, regularPayments, deposits,
+      savingsAccounts, savingsAccruals, investments,
       friendDebts, insurancePolicies, wishlistItems, notifications, cashbackCards, achievements,
       recurringTemplates, profile, isLoaded: true,
     });
+    await get().accrueSavingsInterest();
   },
 
   addTransaction: async (t) => {
@@ -347,6 +366,59 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set((state) => ({ deposits: state.deposits.filter((d) => d.id !== id) }));
   },
 
+  saveSavingsAccount: async (a) => {
+    const account: SavingsAccount = 'id' in a ? a : { id: generateId(), ...a };
+    await repo.upsertSavingsAccount(account);
+    set((state) => ({
+      savingsAccounts: state.savingsAccounts.some((x) => x.id === account.id)
+        ? state.savingsAccounts.map((x) => (x.id === account.id ? account : x))
+        : [...state.savingsAccounts, account],
+    }));
+  },
+  removeSavingsAccount: async (id) => {
+    await repo.deleteSavingsAccount(id);
+    set((state) => ({
+      savingsAccounts: state.savingsAccounts.filter((a) => a.id !== id),
+      savingsAccruals: state.savingsAccruals.filter((a) => a.accountId !== id),
+    }));
+  },
+
+  accrueSavingsInterest: async () => {
+    const now = new Date();
+    const accounts = get().savingsAccounts;
+    const updatedAccounts: SavingsAccount[] = [];
+    const newAccruals: SavingsAccrual[] = [];
+
+    for (const account of accounts) {
+      const elapsed = monthsElapsed(account.lastAccrualDate, now);
+      if (elapsed <= 0) {
+        updatedAccounts.push(account);
+        continue;
+      }
+      let balance = account.balance;
+      let accrualDate = new Date(account.lastAccrualDate);
+      for (let i = 0; i < elapsed; i++) {
+        accrualDate = new Date(accrualDate.getFullYear(), accrualDate.getMonth() + 1, accrualDate.getDate());
+        const interest = calculateMonthlyInterest(balance, account.rate);
+        if (interest > 0) {
+          balance += interest;
+          newAccruals.push({ id: generateId(), accountId: account.id, date: accrualDate, amount: interest });
+        }
+      }
+      const updated: SavingsAccount = { ...account, balance, lastAccrualDate: accrualDate };
+      updatedAccounts.push(updated);
+      await repo.upsertSavingsAccount(updated);
+    }
+
+    if (newAccruals.length === 0) return;
+    for (const accrual of newAccruals) await repo.insertSavingsAccrual(accrual);
+
+    set((state) => ({
+      savingsAccounts: updatedAccounts,
+      savingsAccruals: [...newAccruals, ...state.savingsAccruals],
+    }));
+  },
+
   saveInvestment: async (i) => {
     const investment: Investment = 'id' in i ? i : { id: generateId(), ...i };
     await repo.upsertInvestment(investment);
@@ -474,7 +546,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await setMeta(SEED_FLAG_KEY, 'true');
     set({
       transactions: [], goals: [], credits: [], creditRepayments: [], budgetLimits: [], regularPayments: [],
-      deposits: [], investments: [], friendDebts: [], insurancePolicies: [], wishlistItems: [],
+      deposits: [], savingsAccounts: [], savingsAccruals: [], investments: [], friendDebts: [], insurancePolicies: [], wishlistItems: [],
       notifications: [], cashbackCards: [], achievements: [], recurringTemplates: [], profile: null,
       isLoaded: false,
     });

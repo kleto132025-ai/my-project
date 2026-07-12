@@ -16,10 +16,10 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
 import { confirmDelete } from '../../utils/confirm';
-import type { AssetType, Goal, Deposit, Investment, CashbackCard } from '../../types';
+import type { AssetType, Goal, Deposit, SavingsAccount, Investment, CashbackCard } from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
-type Segment = 'deposits' | 'investments' | 'goals' | 'cashback';
+type Segment = 'deposits' | 'accounts' | 'investments' | 'goals' | 'cashback';
 
 const ASSET_TYPES: AssetType[] = ['stock', 'bond', 'crypto', 'fund'];
 const ASSET_LABELS: Record<AssetType, string> = { stock: 'Акции', bond: 'Облигации', crypto: 'Крипта', fund: 'ПИФ' };
@@ -32,14 +32,18 @@ export function SavingsScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const deposits = useFinanceStore((s) => s.deposits);
+  const savingsAccounts = useFinanceStore((s) => s.savingsAccounts);
+  const savingsAccruals = useFinanceStore((s) => s.savingsAccruals);
   const investments = useFinanceStore((s) => s.investments);
   const goals = useFinanceStore((s) => s.goals);
   const cashbackCards = useFinanceStore((s) => s.cashbackCards);
   const saveDeposit = useFinanceStore((s) => s.saveDeposit);
+  const saveSavingsAccount = useFinanceStore((s) => s.saveSavingsAccount);
   const saveInvestment = useFinanceStore((s) => s.saveInvestment);
   const saveGoal = useFinanceStore((s) => s.saveGoal);
   const saveCashbackCard = useFinanceStore((s) => s.saveCashbackCard);
   const removeDeposit = useFinanceStore((s) => s.removeDeposit);
+  const removeSavingsAccount = useFinanceStore((s) => s.removeSavingsAccount);
   const removeInvestment = useFinanceStore((s) => s.removeInvestment);
   const removeGoal = useFinanceStore((s) => s.removeGoal);
   const removeCashbackCard = useFinanceStore((s) => s.removeCashbackCard);
@@ -91,6 +95,14 @@ export function SavingsScreen() {
     setShowForm(true);
   };
 
+  const startEditSavingsAccount = (a: SavingsAccount) => {
+    setName(a.name);
+    setAmount(String(a.balance));
+    setRate(String(a.rate));
+    setEditingId(a.id);
+    setShowForm(true);
+  };
+
   const startEditInvestment = (i: Investment) => {
     setName(i.name);
     setAssetType(i.assetType);
@@ -118,6 +130,21 @@ export function SavingsScreen() {
       openDate,
       closeDate,
     } as Deposit);
+    resetForm();
+  };
+
+  const handleAddSavingsAccount = async () => {
+    if (!name.trim() || !amount) return;
+    const existing = editingId ? savingsAccounts.find((a) => a.id === editingId) : undefined;
+    await saveSavingsAccount({
+      ...(editingId ? { id: editingId } : {}),
+      name: name.trim(),
+      balance: parseLocaleNumber(amount),
+      rate: parseLocaleNumber(rate || '0'),
+      // Дата, с которой ведётся отсчёт начислений — при создании счёта это сегодня,
+      // при редактировании остатка/ставки уже существующего счёта не сбрасывается.
+      lastAccrualDate: existing?.lastAccrualDate ?? new Date(),
+    } as SavingsAccount);
     resetForm();
   };
 
@@ -176,6 +203,7 @@ export function SavingsScreen() {
         options={[
           { label: 'Цели', value: 'goals' },
           { label: 'Вклады', value: 'deposits' },
+          { label: 'Счета', value: 'accounts' },
           { label: 'Инвестиции', value: 'investments' },
           { label: 'Кэшбэк', value: 'cashback' },
         ]}
@@ -270,6 +298,60 @@ export function SavingsScreen() {
             </Card>
           ) : (
             <AppButton title="+ Добавить вклад" variant="outline" onPress={() => setShowForm(true)} />
+          )}
+        </>
+      )}
+
+      {segment === 'accounts' && (
+        <>
+          {savingsAccounts.length === 0 ? (
+            <EmptyState title="Нет накопительных счетов" />
+          ) : (
+            savingsAccounts.map((a) => {
+              const nextAccrualDate = new Date(
+                a.lastAccrualDate.getFullYear(),
+                a.lastAccrualDate.getMonth() + 1,
+                a.lastAccrualDate.getDate()
+              );
+              const lastAccrual = savingsAccruals
+                .filter((acc) => acc.accountId === a.id)
+                .sort((x, y) => y.date.getTime() - x.date.getTime())[0];
+              return (
+                <Card key={a.id}>
+                  <View style={styles.rowBetween}>
+                    <Text style={[styles.itemTitle, { color: theme.text }]}>{a.name}</Text>
+                    <CardActions
+                      onEdit={() => startEditSavingsAccount(a)}
+                      onDelete={() => confirmDelete(a.name, () => removeSavingsAccount(a.id))}
+                    />
+                  </View>
+                  <Text style={{ color: theme.textMuted, marginTop: 4 }}>
+                    {formatCurrency(a.balance, currency)} · {formatNumber(a.rate)}% годовых
+                  </Text>
+                  <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
+                    Проценты начисляются ежемесячно на остаток · следующее начисление:{' '}
+                    {nextAccrualDate.toLocaleDateString('ru-RU')}
+                  </Text>
+                  {lastAccrual && (
+                    <Text style={{ color: theme.success, fontSize: 12, marginTop: 4, fontWeight: '600' }}>
+                      Начислено {lastAccrual.date.toLocaleDateString('ru-RU')}: +{formatCurrency(lastAccrual.amount, currency)}
+                    </Text>
+                  )}
+                </Card>
+              );
+            })
+          )}
+          {showForm ? (
+            <Card>
+              <FormInput label="Название счёта" value={name} onChangeText={setName} placeholder="Накопительный счёт" />
+              <FormInput label="Текущий остаток" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+              <FormInput label="Ставка % годовых" keyboardType="decimal-pad" value={rate} onChangeText={setRate} />
+              <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить счёт'} onPress={handleAddSavingsAccount} />
+              <View style={{ height: spacing.sm }} />
+              <AppButton title="Отмена" variant="outline" onPress={resetForm} />
+            </Card>
+          ) : (
+            <AppButton title="+ Добавить накопительный счёт" variant="outline" onPress={() => setShowForm(true)} />
           )}
         </>
       )}

@@ -7,6 +7,8 @@ import type {
   BudgetLimit,
   RegularPayment,
   Deposit,
+  SavingsAccount,
+  SavingsAccrual,
   Investment,
   FriendDebt,
   InsurancePolicy,
@@ -261,6 +263,49 @@ export async function deleteDeposit(id: string): Promise<void> {
   await db.runAsync('DELETE FROM deposits WHERE id = ?;', [id]);
 }
 
+// ---------- Savings accounts ----------
+
+type SavingsAccountRow = Omit<SavingsAccount, 'lastAccrualDate'> & { lastAccrualDate: string };
+
+export async function listSavingsAccounts(): Promise<SavingsAccount[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<SavingsAccountRow>('SELECT * FROM savings_accounts;');
+  return rows.map((r) => ({ ...r, lastAccrualDate: new Date(r.lastAccrualDate) }));
+}
+
+export async function upsertSavingsAccount(a: SavingsAccount): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO savings_accounts (id, name, balance, rate, lastAccrualDate)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET name=excluded.name, balance=excluded.balance, rate=excluded.rate,
+       lastAccrualDate=excluded.lastAccrualDate;`,
+    [a.id, a.name, a.balance, a.rate, a.lastAccrualDate.toISOString()]
+  );
+}
+
+export async function deleteSavingsAccount(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM savings_accounts WHERE id = ?;', [id]);
+  await db.runAsync('DELETE FROM savings_accruals WHERE accountId = ?;', [id]);
+}
+
+type SavingsAccrualRow = Omit<SavingsAccrual, 'date'> & { date: string };
+
+export async function listSavingsAccruals(): Promise<SavingsAccrual[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<SavingsAccrualRow>('SELECT * FROM savings_accruals ORDER BY date DESC;');
+  return rows.map((r) => ({ ...r, date: new Date(r.date) }));
+}
+
+export async function insertSavingsAccrual(a: SavingsAccrual): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO savings_accruals (id, accountId, date, amount) VALUES (?, ?, ?, ?);`,
+    [a.id, a.accountId, a.date.toISOString(), a.amount]
+  );
+}
+
 // ---------- Investments ----------
 
 export async function listInvestments(): Promise<Investment[]> {
@@ -500,6 +545,7 @@ export async function resetAllData(): Promise<void> {
   const db = await getDb();
   const tables = [
     'transactions', 'goals', 'credits', 'credit_repayments', 'budget_limits', 'regular_payments', 'deposits',
+    'savings_accounts', 'savings_accruals',
     'investments', 'friend_debts', 'insurance_policies', 'wishlist_items', 'notifications',
     'cashback_cards', 'achievements', 'recurring_templates', 'user_profile', 'app_meta',
   ];

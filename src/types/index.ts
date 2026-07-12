@@ -88,6 +88,26 @@ export interface Deposit {
   closeDate: Date;
 }
 
+// В отличие от Deposit (вклад с фиксированным сроком), у накопительного счёта нет даты
+// закрытия — остаток можно пополнять/снимать, а проценты начисляются на текущий остаток
+// в конце каждого календарного месяца.
+export interface SavingsAccount {
+  id: string;
+  name: string;
+  balance: number;
+  /** Годовая процентная ставка, % — начисляется на остаток помесячно. */
+  rate: number;
+  /** Дата, по которую проценты уже начислены (изначально — дата открытия счёта). */
+  lastAccrualDate: Date;
+}
+
+export interface SavingsAccrual {
+  id: string;
+  accountId: string;
+  date: Date;
+  amount: number;
+}
+
 export type AssetType = 'stock' | 'bond' | 'crypto' | 'fund';
 
 export interface Investment {

@@ -99,3 +99,15 @@ export function calculateAmortizationStep(
   const newRemaining = Math.max(Math.round((remaining - principalPortion) * 100) / 100, 0);
   return { interestPortion, principalPortion, newRemaining };
 }
+
+// Проценты по накопительному счёту, начисляемые на остаток за один календарный месяц.
+export function calculateMonthlyInterest(balance: number, annualRatePercent: number): number {
+  return Math.round(balance * (annualRatePercent / 100 / 12) * 100) / 100;
+}
+
+// Сколько полных календарных месяцев прошло между двумя датами (по году/месяцу, без учёта
+// дня) — используется, чтобы понять, за сколько месяцев ещё не начислены проценты по счёту.
+export function monthsElapsed(from: Date, to: Date): number {
+  const months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  return Math.max(months, 0);
+}
