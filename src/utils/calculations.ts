@@ -111,3 +111,30 @@ export function monthsElapsed(from: Date, to: Date): number {
   const months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
   return Math.max(months, 0);
 }
+
+export interface MortgageProfit {
+  /** currentValue − (тело кредита + первый взнос) − проценты − ремонт − страховка. */
+  netProfit: number;
+  /** netProfit относительно того, сколько было заплачено за объект изначально, в %. */
+  netProfitPercent: number;
+  /** currentValue − остаток долга: сколько денег останется на руках при продаже сегодня. */
+  saleProceeds: number;
+}
+
+// Общая формула чистой прибыли/актива по объекту ипотеки, используется и на карточке
+// кредита, и в сводке на главном экране — вынесена в одно место, чтобы не разойтись.
+// Тело кредита (погашённая часть) в расход не идёт: деньги не потрачены, а превратились
+// в капитал — это уже отражено в разнице между currentValue и остатком долга.
+export function calculateMortgageProfit(
+  purchasePrice: number,
+  currentValue: number,
+  remaining: number,
+  totalInterestPaid: number,
+  renovationCosts: number,
+  totalInsuranceCost: number
+): MortgageProfit {
+  const netProfit = currentValue - purchasePrice - totalInterestPaid - renovationCosts - totalInsuranceCost;
+  const netProfitPercent = purchasePrice > 0 ? Math.round((netProfit / purchasePrice) * 1000) / 10 : 0;
+  const saleProceeds = currentValue - remaining;
+  return { netProfit, netProfitPercent, saleProceeds };
+}

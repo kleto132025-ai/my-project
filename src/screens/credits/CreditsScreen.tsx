@@ -15,7 +15,7 @@ import { spacing } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatNumber } from '../../utils/format';
-import { calculateAmortizationStep, calculateMonthlyPayment } from '../../utils/calculations';
+import { calculateAmortizationStep, calculateMonthlyPayment, calculateMortgageProfit } from '../../utils/calculations';
 import { schedulePaymentReminders, scheduleInsuranceReminder, requestNotificationPermissions } from '../../utils/notifications';
 import { confirmDelete } from '../../utils/confirm';
 import type {
@@ -320,18 +320,17 @@ export function CreditsScreen() {
     const totalInterestPaid = history.reduce((sum, r) => sum + (r.amount - r.principalPortion), 0);
     const linkedInsurance = insurancePolicies.filter((p) => p.creditId === c.id);
     const totalInsuranceCost = linkedInsurance.reduce((sum, p) => sum + p.amount, 0);
-    // Чистая прибыль от объекта = (текущая стоимость − стоимость покупки) − все расходы на
-    // владение (проценты, ремонт, страховка). Погашение тела кредита в формулу не входит —
-    // оно не тратит деньги, а переводит их в капитал (равенство видно в самой стоимости).
-    const netProfit =
+    const mortgageProfit =
       c.currentValue != null
-        ? c.currentValue - (c.amount + (c.downPayment ?? 0)) - totalInterestPaid - (c.renovationCosts ?? 0) - totalInsuranceCost
+        ? calculateMortgageProfit(
+            c.amount + (c.downPayment ?? 0),
+            c.currentValue,
+            c.remaining,
+            totalInterestPaid,
+            c.renovationCosts ?? 0,
+            totalInsuranceCost
+          )
         : null;
-    // Отдельная величина от "чистой прибыли": сколько денег реально останется на руках, если
-    // продать объект сегодня. Здесь как раз нужно вычесть остаток основного долга — банку
-    // придётся вернуть именно c.remaining из суммы продажи, это не вопрос доходности, а вопрос
-    // наличных после сделки.
-    const saleProceeds = c.currentValue != null ? c.currentValue - c.remaining : null;
 
     // График строится не от исходной суммы кредита, а от текущего фактического остатка
     // (c.remaining) — иначе после любых внесённых платежей график продолжал бы показывать
@@ -394,24 +393,25 @@ export function CreditsScreen() {
                 Страховка объекта/жизни: {formatCurrency(totalInsuranceCost, currency)}
               </Text>
             )}
-            {c.currentValue != null && (
+            {c.currentValue != null && mortgageProfit && (
               <>
                 <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
                   Текущая стоимость объекта: {formatCurrency(c.currentValue, currency)}
                 </Text>
                 <Text style={{ color: theme.text, fontSize: 12, marginBottom: 2 }}>
-                  Останется при продаже сегодня (за вычетом остатка долга): {formatCurrency(saleProceeds ?? 0, currency)}
+                  Останется при продаже сегодня (за вычетом остатка долга): {formatCurrency(mortgageProfit.saleProceeds, currency)}
                 </Text>
                 <Text
                   style={{
-                    color: (netProfit ?? 0) >= 0 ? theme.success : theme.danger,
+                    color: mortgageProfit.netProfit >= 0 ? theme.success : theme.danger,
                     fontSize: 13,
                     fontWeight: '700',
                     marginTop: 4,
                   }}
                 >
-                  Чистая прибыль от объекта на сегодня: {(netProfit ?? 0) >= 0 ? '+' : ''}
-                  {formatCurrency(netProfit ?? 0, currency)}
+                  Чистая прибыль от объекта на сегодня: {mortgageProfit.netProfit >= 0 ? '+' : ''}
+                  {formatCurrency(mortgageProfit.netProfit, currency)} ({mortgageProfit.netProfit >= 0 ? '+' : ''}
+                  {formatNumber(mortgageProfit.netProfitPercent)}%)
                 </Text>
               </>
             )}

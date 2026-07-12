@@ -9,7 +9,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { useTheme } from '../../theme';
 import { spacing } from '../../theme';
 import { useSettingsStore } from '../../store/settingsStore';
-import { formatCurrency, formatPercent } from '../../utils/format';
+import { formatCurrency, formatPercent, formatNumber } from '../../utils/format';
 import {
   useFreeFunds,
   useTodaySummary,
@@ -20,6 +20,7 @@ import {
   useDebtSummary,
   useInvestmentsSummary,
   useNetWorth,
+  useMortgageAssets,
 } from '../../hooks/useFinancials';
 import type { Transaction } from '../../types';
 
@@ -40,6 +41,7 @@ export function DashboardScreen() {
   const debtSummary = useDebtSummary();
   const investmentsSummary = useInvestmentsSummary();
   const netWorth = useNetWorth();
+  const mortgageAssets = useMortgageAssets();
 
   const isNegative = freeFunds < 0;
 
@@ -66,7 +68,7 @@ export function DashboardScreen() {
           {formatCurrency(netWorth.total, currency)}
         </Text>
         <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2, marginBottom: spacing.sm }}>
-          Остаток ДС + накопления + инвестиции + цели + капитал по ипотеке − остаток по кредитам
+          Только ликвидные накопления — без ипотеки и кредитов
         </Text>
         <View style={styles.debtRow}>
           <Text style={{ color: theme.text }}>Остаток ДС</Text>
@@ -141,6 +143,38 @@ export function DashboardScreen() {
               </Text>
             </View>
           )}
+        </Card>
+      )}
+
+      {mortgageAssets.length > 0 && (
+        <Card>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Актив по ипотеке</Text>
+          {mortgageAssets.map((m, i) => (
+            <View key={m.id} style={i > 0 ? [styles.mortgageAssetBlock, { borderTopColor: theme.border }] : undefined}>
+              {mortgageAssets.length > 1 && (
+                <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>{m.name}</Text>
+              )}
+              <View style={styles.debtRow}>
+                <View style={styles.debtLabelRow}>
+                  <Ionicons name="home-outline" size={16} color={theme.accent} />
+                  <Text style={{ color: theme.text }}>Текущая стоимость</Text>
+                </View>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(m.currentValue, currency)}</Text>
+              </View>
+              <View style={styles.debtRow}>
+                <Text style={{ color: theme.textMuted, fontSize: 13 }}>Останется при продаже сегодня</Text>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>{formatCurrency(m.saleProceeds, currency)}</Text>
+              </View>
+              <View style={[styles.debtRow, styles.debtTotalRow, { borderTopColor: theme.border }]}>
+                <Text style={{ color: theme.textMuted, fontSize: 13 }}>Прирост с учётом расходов</Text>
+                <Text style={{ color: m.netProfit >= 0 ? theme.success : theme.danger, fontWeight: '800' }}>
+                  {m.netProfit >= 0 ? '+' : ''}
+                  {formatCurrency(m.netProfit, currency)} ({m.netProfit >= 0 ? '+' : ''}
+                  {formatNumber(m.netProfitPercent)}%)
+                </Text>
+              </View>
+            </View>
+          ))}
         </Card>
       )}
 
@@ -262,4 +296,5 @@ const styles = StyleSheet.create({
   debtRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
   debtLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   debtTotalRow: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 4, paddingTop: spacing.sm },
+  mortgageAssetBlock: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.sm, paddingTop: spacing.sm },
 });

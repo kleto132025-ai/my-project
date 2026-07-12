@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useFinanceStore } from '../store/financeStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { calculateBalance, calculateForecast } from '../utils/calculations';
+import { calculateBalance, calculateForecast, calculateMortgageProfit } from '../utils/calculations';
 import { normalizeTransactionsToCurrency } from '../utils/currency';
 import { withComputedSpent } from '../utils/budget';
 import type { BudgetLimit, Transaction } from '../types';
@@ -125,49 +125,77 @@ export interface NetWorth {
   savingsAccounts: number;
   deposits: number;
   investments: number;
-  /** Собственный капитал по ипотекам: (текущая стоимость − остаток долга), либо просто
-   *  −остаток, если текущая стоимость объекта не указана — тогда актив не оценён и в
-   *  капитал не добавляется, но долг по нему всё равно учитывается. */
-  mortgageEquity: number;
-  /** Остаток долга по обычным кредитам (не ипотекам). */
-  creditDebt: number;
-  goalsSaved: number;
   total: number;
 }
 
+// Намеренно не включает ни ипотеку/кредиты, ни цели — только "живые" деньги, которыми
+// можно свободно распорядиться: остаток на счетах, накопительные счета, вклады, инвестиции.
+// Актив по ипотеке — отдельная сущность (см. useMortgageAssets), у него другая природа
+// (недвижимость, а не ликвидные накопления), поэтому он в этот общий капитал не сводится.
 export function useNetWorth(): NetWorth {
   const cash = useFreeFunds();
   const investmentsSummary = useInvestmentsSummary();
   const savingsAccountsList = useFinanceStore((s) => s.savingsAccounts);
   const deposits = useFinanceStore((s) => s.deposits);
-  const goals = useFinanceStore((s) => s.goals);
-  const credits = useFinanceStore((s) => s.credits);
 
   return useMemo(() => {
     const savingsAccountsTotal = savingsAccountsList.reduce((sum, a) => sum + a.balance, 0);
     const depositsTotal = deposits.reduce((sum, d) => sum + d.amount, 0);
-    const goalsSaved = goals.reduce((sum, g) => sum + g.savedAmount, 0);
-    const mortgageEquity = credits
-      .filter((c) => c.kind === 'mortgage')
-      .reduce((sum, c) => sum + (c.currentValue != null ? c.currentValue - c.remaining : -c.remaining), 0);
-    const creditDebt = credits.filter((c) => c.kind === 'credit').reduce((sum, c) => sum + c.remaining, 0);
-    const total =
-      cash +
-      savingsAccountsTotal +
-      depositsTotal +
-      investmentsSummary.totalValue +
-      goalsSaved +
-      mortgageEquity -
-      creditDebt;
+    const total = cash + savingsAccountsTotal + depositsTotal + investmentsSummary.totalValue;
     return {
       cash,
       savingsAccounts: savingsAccountsTotal,
       deposits: depositsTotal,
       investments: investmentsSummary.totalValue,
-      mortgageEquity,
-      creditDebt,
-      goalsSaved,
       total,
     };
-  }, [cash, investmentsSummary, savingsAccountsList, deposits, goals, credits]);
+  }, [cash, investmentsSummary, savingsAccountsList, deposits]);
+}
+
+export interface MortgageAsset {
+  id: string;
+  name: string;
+  currentValue: number;
+  remaining: number;
+  netProfit: number;
+  netProfitPercent: number;
+  saleProceeds: number;
+}
+
+// Отдельная сводка по ипотечной недвижимости — сколько объект реально стоит сегодня и
+// насколько он "прирос" с учётом понесённых расходов (проценты, ремонт, страховка).
+// Включает только ипотеки, где заполнена "Текущая рыночная стоимость объекта" — без неё
+// прирост посчитать невозможно.
+export function useMortgageAssets(): MortgageAsset[] {
+  const credits = useFinanceStore((s) => s.credits);
+  const creditRepayments = useFinanceStore((s) => s.creditRepayments);
+  const insurancePolicies = useFinanceStore((s) => s.insurancePolicies);
+
+  return useMemo(() => {
+    return credits
+      .filter((c) => c.kind === 'mortgage' && c.currentValue != null)
+      .map((c) => {
+        const totalInterestPaid = creditRepayments
+          .filter((r) => r.creditId === c.id)
+          .reduce((sum, r) => sum + (r.amount - r.principalPortion), 0);
+        const totalInsuranceCost = insurancePolicies
+          .filter((p) => p.creditId === c.id)
+          .reduce((sum, p) => sum + p.amount, 0);
+        const profit = calculateMortgageProfit(
+          c.amount + (c.downPayment ?? 0),
+          c.currentValue as number,
+          c.remaining,
+          totalInterestPaid,
+          c.renovationCosts ?? 0,
+          totalInsuranceCost
+        );
+        return {
+          id: c.id,
+          name: c.name,
+          currentValue: c.currentValue as number,
+          remaining: c.remaining,
+          ...profit,
+        };
+      });
+  }, [credits, creditRepayments, insurancePolicies]);
 }

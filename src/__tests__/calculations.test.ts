@@ -8,6 +8,7 @@ import {
   calculateAmortizationStep,
   calculateMonthlyInterest,
   monthsElapsed,
+  calculateMortgageProfit,
 } from '../utils/calculations';
 import type { Transaction } from '../types';
 
@@ -147,5 +148,26 @@ describe('monthsElapsed', () => {
 
   it('never returns a negative number', () => {
     expect(monthsElapsed(new Date('2026-06-01'), new Date('2026-01-01'))).toBe(0);
+  });
+});
+
+describe('calculateMortgageProfit', () => {
+  it('computes net profit and percent gain relative to purchase price', () => {
+    // Куплено за 5 000 000 (4 000 000 кредит + 1 000 000 взнос), сейчас стоит 6 000 000,
+    // выплачено 300 000 процентов, 200 000 на ремонт, 50 000 страховки за всё время.
+    const result = calculateMortgageProfit(5_000_000, 6_000_000, 3_500_000, 300_000, 200_000, 50_000);
+    expect(result.netProfit).toBe(450_000);
+    expect(result.netProfitPercent).toBe(9);
+    expect(result.saleProceeds).toBe(2_500_000);
+  });
+
+  it('returns a negative net profit when costs exceed appreciation', () => {
+    const result = calculateMortgageProfit(5_000_000, 5_100_000, 4_500_000, 400_000, 100_000, 60_000);
+    expect(result.netProfit).toBeLessThan(0);
+  });
+
+  it('handles a zero purchase price without dividing by zero', () => {
+    const result = calculateMortgageProfit(0, 100, 0, 0, 0, 0);
+    expect(result.netProfitPercent).toBe(0);
   });
 });
