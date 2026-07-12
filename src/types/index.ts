@@ -41,6 +41,8 @@ export interface Credit {
   nextPaymentDate: Date;
   /** Дата выдачи кредита. */
   startDate: Date;
+  /** Валюта, в которой указаны все денежные поля этого кредита (amount, remaining, ...). */
+  currency: Currency;
   /** Только для kind === 'mortgage'. */
   propertyAddress?: string;
   /** Только для kind === 'mortgage'. */
@@ -90,6 +92,7 @@ export interface Deposit {
   rate: number;
   openDate: Date;
   closeDate: Date;
+  currency: Currency;
 }
 
 // В отличие от Deposit (вклад с фиксированным сроком), у накопительного счёта нет даты
@@ -103,6 +106,7 @@ export interface SavingsAccount {
   rate: number;
   /** Дата, по которую проценты уже начислены (изначально — дата открытия счёта). */
   lastAccrualDate: Date;
+  currency: Currency;
 }
 
 export interface SavingsAccrual {
@@ -121,6 +125,7 @@ export interface Investment {
   quantity: number;
   purchasePrice: number;
   currentPrice: number;
+  currency: Currency;
 }
 
 // Дивиденды (для акций) или купоны (для облигаций) — тип выплаты не хранится отдельно,

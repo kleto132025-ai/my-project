@@ -15,11 +15,23 @@ import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
+import { convertAmount } from '../../utils/currency';
 import { confirmDelete } from '../../utils/confirm';
-import type { AssetType, Goal, Deposit, SavingsAccount, Investment, InvestmentPayout, CashbackCard } from '../../types';
+import type {
+  AssetType,
+  Goal,
+  Deposit,
+  SavingsAccount,
+  Investment,
+  InvestmentPayout,
+  CashbackCard,
+  Currency,
+} from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'deposits' | 'accounts' | 'investments' | 'goals' | 'cashback';
+
+const CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR'];
 
 const ASSET_TYPES: AssetType[] = ['stock', 'bond', 'crypto', 'fund'];
 const ASSET_LABELS: Record<AssetType, string> = { stock: 'Акции', bond: 'Облигации', crypto: 'Крипта', fund: 'ПИФ' };
@@ -34,6 +46,7 @@ const PAYOUT_LABELS: Record<AssetType, string> = {
 export function SavingsScreen() {
   const theme = useTheme();
   const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
   const [segment, setSegment] = useState<Segment>('goals');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -78,6 +91,7 @@ export function SavingsScreen() {
   const [deadline, setDeadline] = useState(new Date(Date.now() + 180 * 24 * 3600 * 1000));
   const [isShared, setIsShared] = useState(false);
   const [partnerName, setPartnerName] = useState('');
+  const [entryCurrency, setEntryCurrency] = useState<Currency>(currency);
 
   const resetForm = () => {
     setName('');
@@ -88,6 +102,7 @@ export function SavingsScreen() {
     setCurrentPrice('');
     setIsShared(false);
     setPartnerName('');
+    setEntryCurrency(currency);
     setShowForm(false);
     setEditingId(null);
   };
@@ -108,6 +123,7 @@ export function SavingsScreen() {
     setRate(String(d.rate));
     setOpenDate(d.openDate);
     setCloseDate(d.closeDate);
+    setEntryCurrency(d.currency);
     setEditingId(d.id);
     setShowForm(true);
   };
@@ -116,6 +132,7 @@ export function SavingsScreen() {
     setName(a.name);
     setAmount(String(a.balance));
     setRate(String(a.rate));
+    setEntryCurrency(a.currency);
     setEditingId(a.id);
     setShowForm(true);
   };
@@ -126,6 +143,7 @@ export function SavingsScreen() {
     setQuantity(String(i.quantity));
     setPurchasePrice(String(i.purchasePrice));
     setCurrentPrice(String(i.currentPrice));
+    setEntryCurrency(i.currency);
     setEditingId(i.id);
     setShowForm(true);
   };
@@ -146,6 +164,7 @@ export function SavingsScreen() {
       rate: parseLocaleNumber(rate || '0'),
       openDate,
       closeDate,
+      currency: entryCurrency,
     } as Deposit);
     resetForm();
   };
@@ -161,6 +180,7 @@ export function SavingsScreen() {
       // Дата, с которой ведётся отсчёт начислений — при создании счёта это сегодня,
       // при редактировании остатка/ставки уже существующего счёта не сбрасывается.
       lastAccrualDate: existing?.lastAccrualDate ?? new Date(),
+      currency: entryCurrency,
     } as SavingsAccount);
     resetForm();
   };
@@ -174,6 +194,7 @@ export function SavingsScreen() {
       quantity: parseLocaleNumber(quantity),
       purchasePrice: parseLocaleNumber(purchasePrice || '0'),
       currentPrice: parseLocaleNumber(currentPrice || purchasePrice || '0'),
+      currency: entryCurrency,
     } as Investment);
     resetForm();
   };
@@ -321,7 +342,7 @@ export function SavingsScreen() {
                   <CardActions onEdit={() => startEditDeposit(d)} onDelete={() => confirmDelete(d.name, () => removeDeposit(d.id))} />
                 </View>
                 <Text style={{ color: theme.textMuted, marginTop: 4 }}>
-                  {formatCurrency(d.amount, currency)} · {formatNumber(d.rate)}% годовых
+                  {formatCurrency(convertAmount(d.amount, d.currency, currency, rates), currency)} · {formatNumber(d.rate)}% годовых
                 </Text>
                 <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
                   {d.openDate.toLocaleDateString('ru-RU')} — {d.closeDate.toLocaleDateString('ru-RU')}
@@ -332,6 +353,12 @@ export function SavingsScreen() {
           {showForm ? (
             <Card>
               <FormInput label="Название" value={name} onChangeText={setName} />
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>Валюта</Text>
+              <SegmentedControl
+                value={entryCurrency}
+                onChange={setEntryCurrency}
+                options={CURRENCIES.map((c) => ({ label: c, value: c }))}
+              />
               <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               <FormInput label="Ставка %" keyboardType="decimal-pad" value={rate} onChangeText={setRate} />
               <DateField label="Дата открытия" value={openDate} onChange={setOpenDate} />
@@ -370,7 +397,7 @@ export function SavingsScreen() {
                     />
                   </View>
                   <Text style={{ color: theme.textMuted, marginTop: 4 }}>
-                    {formatCurrency(a.balance, currency)} · {formatNumber(a.rate)}% годовых
+                    {formatCurrency(convertAmount(a.balance, a.currency, currency, rates), currency)} · {formatNumber(a.rate)}% годовых
                   </Text>
                   <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 2 }}>
                     Проценты начисляются ежемесячно на остаток · следующее начисление:{' '}
@@ -378,7 +405,8 @@ export function SavingsScreen() {
                   </Text>
                   {lastAccrual && (
                     <Text style={{ color: theme.success, fontSize: 12, marginTop: 4, fontWeight: '600' }}>
-                      Начислено {lastAccrual.date.toLocaleDateString('ru-RU')}: +{formatCurrency(lastAccrual.amount, currency)}
+                      Начислено {lastAccrual.date.toLocaleDateString('ru-RU')}: +
+                      {formatCurrency(convertAmount(lastAccrual.amount, a.currency, currency, rates), currency)}
                     </Text>
                   )}
                 </Card>
@@ -388,6 +416,12 @@ export function SavingsScreen() {
           {showForm ? (
             <Card>
               <FormInput label="Название счёта" value={name} onChangeText={setName} placeholder="Накопительный счёт" />
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>Валюта</Text>
+              <SegmentedControl
+                value={entryCurrency}
+                onChange={setEntryCurrency}
+                options={CURRENCIES.map((c) => ({ label: c, value: c }))}
+              />
               <FormInput label="Текущий остаток" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
               <FormInput label="Ставка % годовых" keyboardType="decimal-pad" value={rate} onChangeText={setRate} />
               <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить счёт'} onPress={handleAddSavingsAccount} />
@@ -414,6 +448,7 @@ export function SavingsScreen() {
                 .filter((p) => p.investmentId === i.id)
                 .sort((a, b) => b.date.getTime() - a.date.getTime());
               const totalPayouts = payouts.reduce((sum, p) => sum + p.amount, 0);
+              const fmt = (a: number) => formatCurrency(convertAmount(a, i.currency, currency, rates), currency);
               return (
                 <Card key={i.id}>
                   <View style={styles.rowBetween}>
@@ -424,7 +459,7 @@ export function SavingsScreen() {
                     </View>
                   </View>
                   <Text style={{ color: theme.textMuted, marginTop: 4 }}>
-                    {i.quantity} шт. по {formatCurrency(i.currentPrice, currency)}
+                    {i.quantity} шт. по {fmt(i.currentPrice)}
                   </Text>
                   <Text style={{ color: profitPercent >= 0 ? theme.success : theme.danger, fontWeight: '700' }}>
                     {profitPercent >= 0 ? '+' : ''}
@@ -432,7 +467,7 @@ export function SavingsScreen() {
                   </Text>
                   {totalPayouts > 0 && (
                     <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 4 }}>
-                      {payoutLabel} всего: {formatCurrency(totalPayouts, currency)}
+                      {payoutLabel} всего: {fmt(totalPayouts)}
                     </Text>
                   )}
                   <AppButton
@@ -463,7 +498,7 @@ export function SavingsScreen() {
                                 <Text style={{ color: theme.textMuted, fontSize: 12 }}>
                                   {p.date.toLocaleDateString('ru-RU')}
                                 </Text>
-                                <Text style={{ color: theme.text, fontSize: 12 }}>{formatCurrency(p.amount, currency)}</Text>
+                                <Text style={{ color: theme.text, fontSize: 12 }}>{fmt(p.amount)}</Text>
                                 <CardActions
                                   onEdit={() => startEditPayout(p)}
                                   onDelete={() =>
@@ -501,6 +536,12 @@ export function SavingsScreen() {
                 value={assetType}
                 onChange={setAssetType}
                 options={ASSET_TYPES.map((a) => ({ label: ASSET_LABELS[a], value: a }))}
+              />
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>Валюта</Text>
+              <SegmentedControl
+                value={entryCurrency}
+                onChange={setEntryCurrency}
+                options={CURRENCIES.map((c) => ({ label: c, value: c }))}
               />
               <FormInput label="Количество" keyboardType="decimal-pad" value={quantity} onChangeText={setQuantity} />
               <FormInput

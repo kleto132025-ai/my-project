@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS credits (
   propertyAddress TEXT,
   downPayment REAL,
   currentValue REAL,
-  renovationCosts REAL
+  renovationCosts REAL,
+  currency TEXT NOT NULL DEFAULT 'RUB'
 );
 
 -- История досрочных погашений: одна запись на каждое частичное или полное погашение,
@@ -80,7 +81,8 @@ CREATE TABLE IF NOT EXISTS deposits (
   amount REAL NOT NULL,
   rate REAL NOT NULL,
   openDate TEXT NOT NULL,
-  closeDate TEXT NOT NULL
+  closeDate TEXT NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'RUB'
 );
 
 CREATE TABLE IF NOT EXISTS investments (
@@ -89,7 +91,8 @@ CREATE TABLE IF NOT EXISTS investments (
   assetType TEXT NOT NULL,
   quantity REAL NOT NULL,
   purchasePrice REAL NOT NULL,
-  currentPrice REAL NOT NULL
+  currentPrice REAL NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'RUB'
 );
 
 -- Дивиденды по акциям / купоны по облигациям — история выплат по конкретному активу.
@@ -108,7 +111,8 @@ CREATE TABLE IF NOT EXISTS savings_accounts (
   name TEXT NOT NULL,
   balance REAL NOT NULL,
   rate REAL NOT NULL,
-  lastAccrualDate TEXT NOT NULL
+  lastAccrualDate TEXT NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'RUB'
 );
 
 CREATE TABLE IF NOT EXISTS savings_accruals (

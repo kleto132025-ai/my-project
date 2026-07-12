@@ -195,7 +195,7 @@
 
 Файл: `src/screens/credits/CreditsScreen.tsx`. Модель погашений — `src/store/financeStore.ts` (`repayCredit` — досрочное погашение, `makePayment` — плановый платёж), `src/database/repository.ts` (`credit_repayments`).
 
-> Для существующих установок (у кого уже была БД до этой фичи) добавлены лёгкие миграции — `src/database/client.ts` докатывает недостающие колонки (`credits.kind`, `credits.propertyAddress`, `credits.downPayment`, `credit_repayments.principalPortion`, `credits.currentValue`, `credits.renovationCosts`, `insurance_policies.creditId`, `insurance_policies.paymentFrequency`) через `ALTER TABLE`, игнорируя ошибку, если колонка уже есть.
+> Для существующих установок (у кого уже была БД до этой фичи) добавлены лёгкие миграции — `src/database/client.ts` докатывает недостающие колонки (`credits.kind`, `credits.propertyAddress`, `credits.downPayment`, `credit_repayments.principalPortion`, `credits.currentValue`, `credits.renovationCosts`, `insurance_policies.creditId`, `insurance_policies.paymentFrequency`, `credits.currency`, `deposits.currency`, `investments.currency`, `savings_accounts.currency` — все `DEFAULT 'RUB'`) через `ALTER TABLE`, игнорируя ошибку, если колонка уже есть.
 
 ---
 
@@ -271,7 +271,7 @@
 
 ## 16. Настройки
 
-- Валюта: RUB/USD/EUR с ручным курсом к рублю. **Курс реально используется** — суммы конвертируются (`src/utils/currency.ts`), а не просто меняется значок валюты.
+- Валюта: RUB/USD/EUR с ручным курсом к рублю. **Курс реально используется** — суммы конвертируются (`src/utils/currency.ts`), а не просто меняется значок валюты. Это касается не только транзакций, но и **кредитов/ипотек, вкладов, инвестиций и накопительных счетов** — у каждой такой записи есть собственное поле `currency` (валюта фиксируется в форме при создании, по умолчанию — текущая валюта отображения, и сохраняется при редактировании неизменной). При смене валюты в Настройках все суммы этих сущностей — на карточках, в сводных итогах (`useDebtSummary`, `useInvestmentsSummary`, `useNetWorth`, `useMortgageAssets`), в графике погашения — конвертируются в текущую валюту отображения через `convertAmount`, а не отображаются «как есть» под новым значком. Расчёты (амортизация, симуляция процентов) всегда идут в собственной валюте записи — конвертация происходит только в момент форматирования для показа.
 - Тёмная/светлая тема, выбор цветовой схемы.
 - Смена метода входа (PIN/пароль/биометрия).
 - **API-ключ ИИ** (Claude/Anthropic) — ввод/удаление, статус «Ключ сохранён», кнопка перехода на страницу получения ключа. См. раздел 15 выше.

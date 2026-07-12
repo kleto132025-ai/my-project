@@ -121,13 +121,13 @@ export async function listCredits(): Promise<Credit[]> {
 export async function upsertCredit(c: Credit): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO credits (id, kind, name, amount, rate, termMonths, monthlyPayment, remaining, nextPaymentDate, startDate, propertyAddress, downPayment, currentValue, renovationCosts)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO credits (id, kind, name, amount, rate, termMonths, monthlyPayment, remaining, nextPaymentDate, startDate, propertyAddress, downPayment, currentValue, renovationCosts, currency)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, name=excluded.name, amount=excluded.amount, rate=excluded.rate,
        termMonths=excluded.termMonths, monthlyPayment=excluded.monthlyPayment, remaining=excluded.remaining,
        nextPaymentDate=excluded.nextPaymentDate, startDate=excluded.startDate,
        propertyAddress=excluded.propertyAddress, downPayment=excluded.downPayment,
-       currentValue=excluded.currentValue, renovationCosts=excluded.renovationCosts;`,
+       currentValue=excluded.currentValue, renovationCosts=excluded.renovationCosts, currency=excluded.currency;`,
     [
       c.id,
       c.kind,
@@ -143,6 +143,7 @@ export async function upsertCredit(c: Credit): Promise<void> {
       c.downPayment ?? null,
       c.currentValue ?? null,
       c.renovationCosts ?? null,
+      c.currency,
     ]
   );
 }
@@ -254,11 +255,11 @@ export async function listDeposits(): Promise<Deposit[]> {
 export async function upsertDeposit(d: Deposit): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO deposits (id, name, amount, rate, openDate, closeDate)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO deposits (id, name, amount, rate, openDate, closeDate, currency)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name, amount=excluded.amount, rate=excluded.rate,
-       openDate=excluded.openDate, closeDate=excluded.closeDate;`,
-    [d.id, d.name, d.amount, d.rate, d.openDate.toISOString(), d.closeDate.toISOString()]
+       openDate=excluded.openDate, closeDate=excluded.closeDate, currency=excluded.currency;`,
+    [d.id, d.name, d.amount, d.rate, d.openDate.toISOString(), d.closeDate.toISOString(), d.currency]
   );
 }
 
@@ -280,11 +281,11 @@ export async function listSavingsAccounts(): Promise<SavingsAccount[]> {
 export async function upsertSavingsAccount(a: SavingsAccount): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO savings_accounts (id, name, balance, rate, lastAccrualDate)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO savings_accounts (id, name, balance, rate, lastAccrualDate, currency)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name, balance=excluded.balance, rate=excluded.rate,
-       lastAccrualDate=excluded.lastAccrualDate;`,
-    [a.id, a.name, a.balance, a.rate, a.lastAccrualDate.toISOString()]
+       lastAccrualDate=excluded.lastAccrualDate, currency=excluded.currency;`,
+    [a.id, a.name, a.balance, a.rate, a.lastAccrualDate.toISOString(), a.currency]
   );
 }
 
@@ -320,11 +321,12 @@ export async function listInvestments(): Promise<Investment[]> {
 export async function upsertInvestment(i: Investment): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO investments (id, name, assetType, quantity, purchasePrice, currentPrice)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO investments (id, name, assetType, quantity, purchasePrice, currentPrice, currency)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name, assetType=excluded.assetType,
-       quantity=excluded.quantity, purchasePrice=excluded.purchasePrice, currentPrice=excluded.currentPrice;`,
-    [i.id, i.name, i.assetType, i.quantity, i.purchasePrice, i.currentPrice]
+       quantity=excluded.quantity, purchasePrice=excluded.purchasePrice, currentPrice=excluded.currentPrice,
+       currency=excluded.currency;`,
+    [i.id, i.name, i.assetType, i.quantity, i.purchasePrice, i.currentPrice, i.currency]
   );
 }
 

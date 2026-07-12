@@ -2,9 +2,9 @@ import { useMemo } from 'react';
 import { useFinanceStore } from '../store/financeStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { calculateBalance, calculateForecast, calculateMortgageProfit, simulateAmortization } from '../utils/calculations';
-import { normalizeTransactionsToCurrency } from '../utils/currency';
+import { normalizeTransactionsToCurrency, convertAmount } from '../utils/currency';
 import { withComputedSpent } from '../utils/budget';
-import type { BudgetLimit, Transaction } from '../types';
+import type { BudgetLimit, Transaction, Currency } from '../types';
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -95,11 +95,15 @@ export interface DebtSummary {
 
 export function useDebtSummary(): DebtSummary {
   const credits = useFinanceStore((s) => s.credits);
+  const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
   return useMemo(() => {
-    const creditsRemaining = credits.filter((c) => c.kind === 'credit').reduce((sum, c) => sum + c.remaining, 0);
-    const mortgageRemaining = credits.filter((c) => c.kind === 'mortgage').reduce((sum, c) => sum + c.remaining, 0);
+    const toDisplay = (c: { remaining: number; currency: Currency }) =>
+      convertAmount(c.remaining, c.currency, currency, rates);
+    const creditsRemaining = credits.filter((c) => c.kind === 'credit').reduce((sum, c) => sum + toDisplay(c), 0);
+    const mortgageRemaining = credits.filter((c) => c.kind === 'mortgage').reduce((sum, c) => sum + toDisplay(c), 0);
     return { creditsRemaining, mortgageRemaining, totalRemaining: creditsRemaining + mortgageRemaining };
-  }, [credits]);
+  }, [credits, currency, rates]);
 }
 
 export interface InvestmentsSummary {
@@ -112,11 +116,22 @@ export interface InvestmentsSummary {
 export function useInvestmentsSummary(): InvestmentsSummary {
   const investments = useFinanceStore((s) => s.investments);
   const investmentPayouts = useFinanceStore((s) => s.investmentPayouts);
+  const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
   return useMemo(() => {
-    const totalValue = investments.reduce((sum, i) => sum + i.quantity * i.currentPrice, 0);
-    const totalPayouts = investmentPayouts.reduce((sum, p) => sum + p.amount, 0);
+    const totalValue = investments.reduce(
+      (sum, i) => sum + convertAmount(i.quantity * i.currentPrice, i.currency, currency, rates),
+      0
+    );
+    // Выплаты (дивиденды/купоны) не хранят собственную валюту — считаются в валюте актива,
+    // к которому относятся.
+    const totalPayouts = investmentPayouts.reduce((sum, p) => {
+      const investment = investments.find((i) => i.id === p.investmentId);
+      const payoutCurrency = investment?.currency ?? currency;
+      return sum + convertAmount(p.amount, payoutCurrency, currency, rates);
+    }, 0);
     return { totalValue, totalPayouts };
-  }, [investments, investmentPayouts]);
+  }, [investments, investmentPayouts, currency, rates]);
 }
 
 export interface NetWorth {
@@ -137,10 +152,15 @@ export function useNetWorth(): NetWorth {
   const investmentsSummary = useInvestmentsSummary();
   const savingsAccountsList = useFinanceStore((s) => s.savingsAccounts);
   const deposits = useFinanceStore((s) => s.deposits);
+  const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
 
   return useMemo(() => {
-    const savingsAccountsTotal = savingsAccountsList.reduce((sum, a) => sum + a.balance, 0);
-    const depositsTotal = deposits.reduce((sum, d) => sum + d.amount, 0);
+    const savingsAccountsTotal = savingsAccountsList.reduce(
+      (sum, a) => sum + convertAmount(a.balance, a.currency, currency, rates),
+      0
+    );
+    const depositsTotal = deposits.reduce((sum, d) => sum + convertAmount(d.amount, d.currency, currency, rates), 0);
     const total = cash + savingsAccountsTotal + depositsTotal + investmentsSummary.totalValue;
     return {
       cash,
@@ -149,7 +169,7 @@ export function useNetWorth(): NetWorth {
       investments: investmentsSummary.totalValue,
       total,
     };
-  }, [cash, investmentsSummary, savingsAccountsList, deposits]);
+  }, [cash, investmentsSummary, savingsAccountsList, deposits, currency, rates]);
 }
 
 export interface MortgageAsset {
@@ -170,6 +190,8 @@ export function useMortgageAssets(): MortgageAsset[] {
   const credits = useFinanceStore((s) => s.credits);
   const creditRepayments = useFinanceStore((s) => s.creditRepayments);
   const insurancePolicies = useFinanceStore((s) => s.insurancePolicies);
+  const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
 
   return useMemo(() => {
     return credits
@@ -178,6 +200,8 @@ export function useMortgageAssets(): MortgageAsset[] {
         // Проценты симулируются от даты выдачи (см. calculateMortgageProfit в CreditsScreen.tsx
         // для подробного объяснения) — так кредиту, взятому много лет назад, не нужно вручную
         // вносить каждый прошедший ежемесячный платёж, только досрочные погашения, если были.
+        // Расчёт идёт в собственной валюте кредита, конвертация в валюту отображения — только
+        // на финальных цифрах, отдаваемых наружу.
         const earlyRepaymentsForSimulation = creditRepayments
           .filter((r) => r.creditId === c.id && r.type !== 'regular')
           .map((r) => ({ date: r.date, amount: r.amount }));
@@ -200,13 +224,16 @@ export function useMortgageAssets(): MortgageAsset[] {
           c.renovationCosts ?? 0,
           totalInsuranceCost
         );
+        const toDisplay = (amount: number) => convertAmount(amount, c.currency, currency, rates);
         return {
           id: c.id,
           name: c.name,
-          currentValue: c.currentValue as number,
-          remaining: c.remaining,
-          ...profit,
+          currentValue: toDisplay(c.currentValue as number),
+          remaining: toDisplay(c.remaining),
+          netProfit: toDisplay(profit.netProfit),
+          netProfitPercent: profit.netProfitPercent,
+          saleProceeds: toDisplay(profit.saleProceeds),
         };
       });
-  }, [credits, creditRepayments, insurancePolicies]);
+  }, [credits, creditRepayments, insurancePolicies, currency, rates]);
 }

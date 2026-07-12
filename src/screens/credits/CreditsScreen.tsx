@@ -31,14 +31,19 @@ import type {
   FriendDebt,
   InsurancePolicy,
   InsurancePaymentFrequency,
+  Currency,
 } from '../../types';
+import { convertAmount } from '../../utils/currency';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
 type Segment = 'credits' | 'mortgage' | 'calendar' | 'debts' | 'insurance';
 
+const CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR'];
+
 export function CreditsScreen() {
   const theme = useTheme();
   const currency = useSettingsStore((s) => s.currency);
+  const rates = useSettingsStore((s) => s.exchangeRates);
   const [segment, setSegment] = useState<Segment>('credits');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,8 +67,14 @@ export function CreditsScreen() {
 
   const credits = useMemo(() => allCredits.filter((c) => c.kind === 'credit'), [allCredits]);
   const mortgages = useMemo(() => allCredits.filter((c) => c.kind === 'mortgage'), [allCredits]);
-  const creditsTotalRemaining = useMemo(() => credits.reduce((sum, c) => sum + c.remaining, 0), [credits]);
-  const mortgageTotalRemaining = useMemo(() => mortgages.reduce((sum, c) => sum + c.remaining, 0), [mortgages]);
+  const creditsTotalRemaining = useMemo(
+    () => credits.reduce((sum, c) => sum + convertAmount(c.remaining, c.currency, currency, rates), 0),
+    [credits, currency, rates]
+  );
+  const mortgageTotalRemaining = useMemo(
+    () => mortgages.reduce((sum, c) => sum + convertAmount(c.remaining, c.currency, currency, rates), 0),
+    [mortgages, currency, rates]
+  );
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
@@ -76,6 +87,7 @@ export function CreditsScreen() {
   const [downPayment, setDownPayment] = useState('');
   const [currentValue, setCurrentValue] = useState('');
   const [renovationCosts, setRenovationCosts] = useState('');
+  const [entryCurrency, setEntryCurrency] = useState<Currency>(currency);
   const [insuranceCreditId, setInsuranceCreditId] = useState('');
   const [personName, setPersonName] = useState('');
   const [debtStatus, setDebtStatus] = useState<DebtStatus>('i_owe');
@@ -107,6 +119,7 @@ export function CreditsScreen() {
     setDownPayment('');
     setCurrentValue('');
     setRenovationCosts('');
+    setEntryCurrency(currency);
     setInsuranceCreditId('');
     setInsurancePaymentFrequency('annual');
     setPersonName('');
@@ -130,6 +143,7 @@ export function CreditsScreen() {
     setDownPayment(c.downPayment != null ? String(c.downPayment) : '');
     setCurrentValue(c.currentValue != null ? String(c.currentValue) : '');
     setRenovationCosts(c.renovationCosts != null ? String(c.renovationCosts) : '');
+    setEntryCurrency(c.currency);
     setEditingId(c.id);
     setShowForm(true);
   };
@@ -194,6 +208,10 @@ export function CreditsScreen() {
       downPayment: formKind === 'mortgage' && downPayment ? parseLocaleNumber(downPayment) : undefined,
       currentValue: formKind === 'mortgage' && currentValue ? parseLocaleNumber(currentValue) : undefined,
       renovationCosts: formKind === 'mortgage' && renovationCosts ? parseLocaleNumber(renovationCosts) : undefined,
+      // Валюта выбирается в форме (по умолчанию — текущая валюта отображения) и сохраняется
+      // как есть: при смене валюты в Настройках суммы конвертируются для отображения, а не
+      // переписываются задним числом.
+      currency: entryCurrency,
     } as Credit);
     resetForm();
   };
@@ -283,7 +301,7 @@ export function CreditsScreen() {
     allCredits.forEach((c) =>
       add(c.nextPaymentDate, {
         label: `${c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'} «${c.name}»`,
-        amount: c.monthlyPayment,
+        amount: convertAmount(c.monthlyPayment, c.currency, currency, rates),
       })
     );
     friendDebts.forEach((d) => d.reminderDate && add(d.reminderDate, { label: `Долг: ${d.personName}`, amount: d.amount }));
@@ -304,13 +322,16 @@ export function CreditsScreen() {
       .filter((p) => p.isActive)
       .forEach((p) => add(new Date(now.getFullYear(), now.getMonth(), p.dayOfMonth), { label: p.name, amount: p.amount }));
     return map;
-  }, [allCredits, friendDebts, insurancePolicies, regularPayments]);
+  }, [allCredits, friendDebts, insurancePolicies, regularPayments, currency, rates]);
 
   const markedDates = useMemo(() => new Set(eventsByDate.keys()), [eventsByDate]);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const selectedDateEvents = selectedDate ? eventsByDate.get(dateKey(selectedDate)) ?? [] : [];
 
   const renderCreditCard = (c: Credit) => {
+    // Все расчёты (амортизация, симуляция процентов) идут в собственной валюте кредита —
+    // конвертация в валюту отображения нужна только в момент форматирования для показа.
+    const fmt = (amount: number) => formatCurrency(convertAmount(amount, c.currency, currency, rates), currency);
     const progress = ((c.amount - c.remaining) / Math.max(c.amount, 1)) * 100;
     const isExpanded = expandedCreditId === c.id;
     const history = creditRepayments
@@ -379,12 +400,12 @@ export function CreditsScreen() {
           <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
             {c.propertyAddress ? `Объект: ${c.propertyAddress}` : ''}
             {c.propertyAddress && c.downPayment != null ? ' · ' : ''}
-            {c.downPayment != null ? `Первонач. взнос: ${formatCurrency(c.downPayment, currency)}` : ''}
+            {c.downPayment != null ? `Первонач. взнос: ${fmt(c.downPayment)}` : ''}
           </Text>
         )}
         <ProgressBar percent={progress} />
         <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
-          Остаток: {formatCurrency(c.remaining, currency)} · Платёж: {formatCurrency(c.monthlyPayment, currency)}/мес
+          Остаток: {fmt(c.remaining)} · Платёж: {fmt(c.monthlyPayment)}/мес
         </Text>
         {fullRepayment && (
           <Text style={{ color: theme.success, marginTop: 4, fontSize: 12, fontWeight: '600' }}>
@@ -395,26 +416,26 @@ export function CreditsScreen() {
           <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }}>
             {totalInterestPaid > 0 && (
               <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
-                Выплачено процентов на сегодня: {formatCurrency(totalInterestPaid, currency)}
+                Выплачено процентов на сегодня: {fmt(totalInterestPaid)}
               </Text>
             )}
             {c.renovationCosts != null && c.renovationCosts > 0 && (
               <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
-                Расходы на ремонт: {formatCurrency(c.renovationCosts, currency)}
+                Расходы на ремонт: {fmt(c.renovationCosts)}
               </Text>
             )}
             {totalInsuranceCost > 0 && (
               <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
-                Страховка объекта/жизни: {formatCurrency(totalInsuranceCost, currency)}
+                Страховка объекта/жизни: {fmt(totalInsuranceCost)}
               </Text>
             )}
             {c.currentValue != null && mortgageProfit && (
               <>
                 <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 2 }}>
-                  Текущая стоимость объекта: {formatCurrency(c.currentValue, currency)}
+                  Текущая стоимость объекта: {fmt(c.currentValue)}
                 </Text>
                 <Text style={{ color: theme.text, fontSize: 12, marginBottom: 2 }}>
-                  Останется при продаже сегодня (за вычетом остатка долга): {formatCurrency(mortgageProfit.saleProceeds, currency)}
+                  Останется при продаже сегодня (за вычетом остатка долга): {fmt(mortgageProfit.saleProceeds)}
                 </Text>
                 <Text
                   style={{
@@ -425,7 +446,7 @@ export function CreditsScreen() {
                   }}
                 >
                   Чистая прибыль от объекта на сегодня: {mortgageProfit.netProfit >= 0 ? '+' : ''}
-                  {formatCurrency(mortgageProfit.netProfit, currency)} ({mortgageProfit.netProfit >= 0 ? '+' : ''}
+                  {fmt(mortgageProfit.netProfit)} ({mortgageProfit.netProfit >= 0 ? '+' : ''}
                   {formatNumber(mortgageProfit.netProfitPercent)}%)
                 </Text>
               </>
@@ -450,10 +471,10 @@ export function CreditsScreen() {
               <View key={i} style={styles.scheduleRow}>
                 <Text style={{ color: theme.textMuted, fontSize: 12 }}>{row.date.toLocaleDateString('ru-RU')}</Text>
                 <Text style={{ color: theme.text, fontSize: 12 }}>
-                  {formatCurrency(row.payment, currency)}
+                  {fmt(row.payment)}
                 </Text>
                 <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                  Остаток: {formatCurrency(row.remaining, currency)}
+                  Остаток: {fmt(row.remaining)}
                 </Text>
               </View>
             ))}
@@ -487,7 +508,7 @@ export function CreditsScreen() {
                       <Text style={{ color: theme.textMuted, fontSize: 12 }}>
                         {r.date.toLocaleDateString('ru-RU')}
                       </Text>
-                      <Text style={{ color: theme.text, fontSize: 12 }}>{formatCurrency(r.amount, currency)}</Text>
+                      <Text style={{ color: theme.text, fontSize: 12 }}>{fmt(r.amount)}</Text>
                       <Text style={{ color: theme.textMuted, fontSize: 12 }}>
                         {r.type === 'full' ? 'Полное' : r.type === 'regular' ? 'Регулярный' : 'Частичное'}
                       </Text>
@@ -547,6 +568,12 @@ export function CreditsScreen() {
   const renderCreditForm = (submitLabel: string) => (
     <Card>
       <FormInput label="Название" value={name} onChangeText={setName} />
+      <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>Валюта</Text>
+      <SegmentedControl
+        value={entryCurrency}
+        onChange={setEntryCurrency}
+        options={CURRENCIES.map((c) => ({ label: c, value: c }))}
+      />
       <FormInput label="Сумма" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
       <FormInput
         label="Текущий остаток долга (на сегодня)"

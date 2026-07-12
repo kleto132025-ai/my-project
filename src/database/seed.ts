@@ -81,6 +81,7 @@ export async function seedDemoDataIfNeeded(): Promise<void> {
     remaining: creditAmount,
     nextPaymentDate: daysFromNow(20),
     startDate: daysAgo(10),
+    currency: 'RUB',
   });
 
   // 3 регулярных платежа
@@ -156,6 +157,7 @@ export async function seedDemoDataIfNeeded(): Promise<void> {
     rate: 12,
     openDate: daysAgo(60),
     closeDate: daysFromNow(305),
+    currency: 'RUB',
   });
   await upsertDeposit({
     id: generateId(),
@@ -164,6 +166,7 @@ export async function seedDemoDataIfNeeded(): Promise<void> {
     rate: 14,
     openDate: daysAgo(30),
     closeDate: daysFromNow(335),
+    currency: 'RUB',
   });
 
   // 1 инвестиция
@@ -174,6 +177,7 @@ export async function seedDemoDataIfNeeded(): Promise<void> {
     quantity: 20,
     purchasePrice: 250,
     currentPrice: 285,
+    currency: 'RUB',
   });
 
   // Достижения (шаблон, разблокируются по мере использования)

@@ -18,6 +18,10 @@ const MIGRATION_STATEMENTS = [
   'ALTER TABLE credits ADD COLUMN renovationCosts REAL;',
   'ALTER TABLE insurance_policies ADD COLUMN creditId TEXT;',
   "ALTER TABLE insurance_policies ADD COLUMN paymentFrequency TEXT NOT NULL DEFAULT 'annual';",
+  "ALTER TABLE credits ADD COLUMN currency TEXT NOT NULL DEFAULT 'RUB';",
+  "ALTER TABLE deposits ADD COLUMN currency TEXT NOT NULL DEFAULT 'RUB';",
+  "ALTER TABLE investments ADD COLUMN currency TEXT NOT NULL DEFAULT 'RUB';",
+  "ALTER TABLE savings_accounts ADD COLUMN currency TEXT NOT NULL DEFAULT 'RUB';",
 ];
 
 async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
