@@ -7,6 +7,7 @@ import { createSimpleStack } from './SimpleStack';
 import { ExtraFeaturesStack } from './ExtraFeaturesStack';
 import { SavingsScreen } from '../screens/savings/SavingsScreen';
 import { CreditsScreen } from '../screens/credits/CreditsScreen';
+import { TransactionsScreen } from '../screens/transactions/TransactionsScreen';
 import { PeriodComparisonScreen } from '../screens/analytics/PeriodComparisonScreen';
 import { NotificationsScreen } from '../screens/notifications/NotificationsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
@@ -17,6 +18,20 @@ const Drawer = createDrawerNavigator();
 
 const SavingsStack = createSimpleStack({ routeName: 'SavingsHome', title: 'Накопления', component: SavingsScreen });
 const CreditsStack = createSimpleStack({ routeName: 'CreditsHome', title: 'Кредиты и платежи', component: CreditsScreen });
+// Тот же экран транзакций, что и на нижней вкладке "Транзакции", но открывается сразу
+// с нужным типом — чтобы не приходилось лезть внутрь и переключать вручную.
+const IncomeStack = createSimpleStack({
+  routeName: 'IncomeHome',
+  title: 'Доходы',
+  component: TransactionsScreen,
+  initialParams: { type: 'income' },
+});
+const ExpenseStack = createSimpleStack({
+  routeName: 'ExpenseHome',
+  title: 'Расходы',
+  component: TransactionsScreen,
+  initialParams: { type: 'expense' },
+});
 const PeriodComparisonStack = createSimpleStack({
   routeName: 'PeriodComparisonHome',
   title: 'Сравнение периодов',
@@ -51,6 +66,16 @@ export function MainDrawer() {
         name="Tabs"
         component={TabsNavigator}
         options={{ title: 'Главная', drawerIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} /> }}
+      />
+      <Drawer.Screen
+        name="Income"
+        component={IncomeStack}
+        options={{ title: 'Доходы', drawerIcon: ({ color, size }) => <Ionicons name="arrow-down-circle-outline" size={size} color={color} /> }}
+      />
+      <Drawer.Screen
+        name="Expense"
+        component={ExpenseStack}
+        options={{ title: 'Расходы', drawerIcon: ({ color, size }) => <Ionicons name="arrow-up-circle-outline" size={size} color={color} /> }}
       />
       <Drawer.Screen
         name="Savings"

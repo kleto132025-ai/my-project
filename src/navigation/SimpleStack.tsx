@@ -12,9 +12,18 @@ interface SimpleStackProps {
   title: string;
   component: React.ComponentType<any>;
   showDrawerToggle?: boolean;
+  /** Стартовые параметры экрана — например, чтобы один и тот же компонент открывался
+   * с разным начальным состоянием из разных пунктов меню (см. "Доходы"/"Расходы"). */
+  initialParams?: Record<string, unknown>;
 }
 
-export function createSimpleStack({ routeName, title, component, showDrawerToggle = true }: SimpleStackProps) {
+export function createSimpleStack({
+  routeName,
+  title,
+  component,
+  showDrawerToggle = true,
+  initialParams,
+}: SimpleStackProps) {
   const SafeComponent = withErrorBoundary(component);
   return function Wrapped() {
     const theme = useTheme();
@@ -23,6 +32,7 @@ export function createSimpleStack({ routeName, title, component, showDrawerToggl
         <Stack.Screen
           name={routeName}
           component={SafeComponent}
+          initialParams={initialParams}
           options={{
             title,
             headerLeft: showDrawerToggle ? () => <DrawerToggleButton tintColor="#FFFFFF" /> : undefined,

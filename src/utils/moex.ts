@@ -75,3 +75,50 @@ export async function fetchMoexPrice(ticker: string, assetType: AssetType): Prom
   }
   return price;
 }
+
+export interface MoexSecuritySearchResult {
+  secid: string;
+  shortname: string;
+}
+
+// Достаёт список тикеров-кандидатов из ответа поиска — модель columns/data та же, что и у
+// остальных ответов ISS, только имена колонок здесь в нижнем регистре (secid/shortname/is_traded),
+// а не в верхнем (LAST/PREVPRICE), как у котировок.
+export function extractSecuritySearchResults(data: unknown): MoexSecuritySearchResult[] {
+  const root = data as { securities?: IssBlock } | null | undefined;
+  const seen = new Set<string>();
+  const results: MoexSecuritySearchResult[] = [];
+  for (const row of issRows(root?.securities)) {
+    if (row.is_traded !== 1) continue;
+    const { secid, shortname } = row;
+    if (typeof secid !== 'string' || typeof shortname !== 'string') continue;
+    if (seen.has(secid)) continue;
+    seen.add(secid);
+    results.push({ secid, shortname });
+  }
+  return results;
+}
+
+// Ищет бумаги по названию компании ("Сбербанк", "Х5") или частичному тикеру — большинство
+// людей не помнят точный биржевой код наизусть. Тот же публичный ISS API, без ключа.
+export async function searchMoexSecurities(query: string): Promise<MoexSecuritySearchResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const url =
+    `https://iss.moex.com/iss/securities.json?q=${encodeURIComponent(trimmed)}` +
+    `&iss.meta=off&securities.columns=secid,shortname,is_traded`;
+
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch {
+    throw new MoexApiError('Нет соединения с Мосбиржей. Проверьте интернет.');
+  }
+  if (!response.ok) {
+    throw new MoexApiError(`Ошибка поиска на Мосбирже (код ${response.status})`);
+  }
+
+  const data = await response.json();
+  return extractSecuritySearchResults(data).slice(0, 10);
+}

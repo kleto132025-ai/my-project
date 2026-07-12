@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, Switch, Alert, Pressable } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
 import { CardActions } from '../../components/CardActions';
@@ -17,7 +17,7 @@ import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
 import { convertAmount } from '../../utils/currency';
 import { confirmDelete } from '../../utils/confirm';
-import { fetchMoexPrice, MoexApiError } from '../../utils/moex';
+import { fetchMoexPrice, searchMoexSecurities, MoexApiError, type MoexSecuritySearchResult } from '../../utils/moex';
 import type {
   AssetType,
   Goal,
@@ -99,6 +99,8 @@ export function SavingsScreen() {
   const [currentPrice, setCurrentPrice] = useState('');
   const [moexTicker, setMoexTicker] = useState('');
   const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
+  const [moexSearchResults, setMoexSearchResults] = useState<MoexSecuritySearchResult[]>([]);
+  const [isSearchingMoex, setIsSearchingMoex] = useState(false);
   const [deadline, setDeadline] = useState(new Date(Date.now() + 180 * 24 * 3600 * 1000));
   const [isShared, setIsShared] = useState(false);
   const [partnerName, setPartnerName] = useState('');
@@ -112,6 +114,7 @@ export function SavingsScreen() {
     setPurchasePrice('');
     setCurrentPrice('');
     setMoexTicker('');
+    setMoexSearchResults([]);
     setIsShared(false);
     setPartnerName('');
     setEntryCurrency(currency);
@@ -239,6 +242,31 @@ export function SavingsScreen() {
     },
     [saveInvestment]
   );
+
+  // Поиск тикера по названию компании ("Сбербанк", "Х5") — большинство пользователей не
+  // знают точный биржевой код наизусть, а ввод названия компании вместо тикера в поле
+  // "Тикер Мосбиржи" просто не находил бы цену (тикер — это код вроде SBER, а не название).
+  const handleSearchMoexTicker = async () => {
+    const query = moexTicker.trim() || name.trim();
+    if (!query) {
+      Alert.alert('Введите название', 'Впишите название компании или тикер в поле выше, затем нажмите «Найти тикер»');
+      return;
+    }
+    setIsSearchingMoex(true);
+    setMoexSearchResults([]);
+    try {
+      const results = await searchMoexSecurities(query);
+      if (results.length === 0) {
+        Alert.alert('Ничего не найдено', `По запросу «${query}» на Мосбирже ничего не нашлось. Попробуйте название по-другому.`);
+      }
+      setMoexSearchResults(results);
+    } catch (e) {
+      const message = e instanceof MoexApiError ? e.message : 'Не удалось выполнить поиск на Мосбирже';
+      Alert.alert('Не удалось найти тикер', message);
+    } finally {
+      setIsSearchingMoex(false);
+    }
+  };
 
   // Автообновление при каждом открытии вкладки «Инвестиции» — так цены, привязанные к
   // тикеру, обычно не приходится обновлять вручную вообще. Список активов на момент
@@ -634,9 +662,34 @@ export function SavingsScreen() {
                     autoCapitalize="characters"
                   />
                   <Text style={{ color: theme.textMuted, fontSize: 11, marginBottom: spacing.sm }}>
-                    Если указать тикер — «Текущая цена» будет подтягиваться с Мосбиржи автоматически
-                    при открытии этой вкладки, вручную вводить её больше не придётся.
+                    Тикер — это короткий биржевой код (например SBER), а не название компании.
+                    Не знаете код — впишите название компании (например «Сбербанк» или «Х5»)
+                    и нажмите «Найти тикер».
                   </Text>
+                  <AppButton
+                    title={isSearchingMoex ? 'Поиск…' : 'Найти тикер по названию'}
+                    variant="outline"
+                    disabled={isSearchingMoex}
+                    onPress={handleSearchMoexTicker}
+                  />
+                  {moexSearchResults.length > 0 && (
+                    <View style={{ marginTop: spacing.sm, marginBottom: spacing.sm }}>
+                      {moexSearchResults.map((r) => (
+                        <Pressable
+                          key={r.secid}
+                          onPress={() => {
+                            setMoexTicker(r.secid);
+                            setMoexSearchResults([]);
+                          }}
+                          style={[styles.moexResultRow, { borderColor: theme.border }]}
+                        >
+                          <Text style={{ color: theme.text, fontWeight: '600' }}>{r.secid}</Text>
+                          <Text style={{ color: theme.textMuted, fontSize: 12 }}>{r.shortname}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                  <View style={{ height: spacing.sm }} />
                 </>
               )}
               <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить актив'} onPress={handleAddInvestment} />
@@ -691,4 +744,5 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  moexResultRow: { borderWidth: 1, borderRadius: 8, padding: spacing.sm, marginBottom: 6 },
 });

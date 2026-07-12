@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { SwipeableTransactionRow } from '../../components/SwipeableTransactionRow';
@@ -32,12 +32,16 @@ function isWithinPeriod(date: Date, period: PeriodFilter): boolean {
 export function TransactionsScreen() {
   const theme = useTheme();
   const navigation = useNavigation<any>();
+  // "Доходы" и "Расходы" в боковом меню открывают этот же экран с разным начальным типом
+  // (initialParams в MainDrawer.tsx) — так пользователю не нужно помнить про переключатель
+  // внутри, если он хочет сразу попасть в нужный список.
+  const route = useRoute<any>();
   const transactions = useFinanceStore((s) => s.transactions);
   const removeTransaction = useFinanceStore((s) => s.removeTransaction);
   const currency = useSettingsStore((s) => s.currency);
   const cashBalance = useFreeFunds();
 
-  const [type, setType] = useState<TransactionType>('expense');
+  const [type, setType] = useState<TransactionType>(route.params?.type ?? 'expense');
   const [period, setPeriod] = useState<PeriodFilter>('month');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [search, setSearch] = useState('');
