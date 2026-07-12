@@ -92,7 +92,15 @@ export function AddTransactionScreen() {
         currency,
       });
       if (soundEnabled) playCoinSound();
-      if (vibrationEnabled) await vibrateSuccess();
+      if (vibrationEnabled) {
+        // Транзакция уже сохранена к этому моменту — сбой вибрации (неподдерживаемое
+        // устройство/эмулятор) не должен мешать закрыть экран.
+        try {
+          await vibrateSuccess();
+        } catch {
+          // не критично — запись уже добавлена
+        }
+      }
     }
     navigation.goBack();
   };

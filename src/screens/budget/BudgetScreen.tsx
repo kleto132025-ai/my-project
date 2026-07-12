@@ -68,7 +68,13 @@ export function BudgetScreen() {
         relatedScreen: 'Budget',
         relatedId: `${limit.id}-${threshold}`,
       });
-      if (vibrationEnabled) await vibrateWarning();
+      if (vibrationEnabled) {
+        try {
+          await vibrateWarning();
+        } catch {
+          // не критично — уведомление о лимите уже добавлено
+        }
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [budgetLimits]);

@@ -110,11 +110,15 @@ export function SavingsScreen() {
     setName('');
     setAmount('');
     setRate('');
+    setOpenDate(new Date());
+    setCloseDate(new Date(Date.now() + 365 * 24 * 3600 * 1000));
+    setAssetType('stock');
     setQuantity('');
     setPurchasePrice('');
     setCurrentPrice('');
     setMoexTicker('');
     setMoexSearchResults([]);
+    setDeadline(new Date(Date.now() + 180 * 24 * 3600 * 1000));
     setIsShared(false);
     setPartnerName('');
     setEntryCurrency(currency);

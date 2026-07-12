@@ -134,6 +134,9 @@ export function CreditsScreen() {
     setInsuranceType('');
     setInsurer('');
     setNextPaymentDateInput(new Date(Date.now() + 30 * 24 * 3600 * 1000));
+    setDebtStatus('i_owe');
+    setReminderDate(new Date(Date.now() + 7 * 24 * 3600 * 1000));
+    setEndDate(new Date(Date.now() + 90 * 24 * 3600 * 1000));
     setShowForm(false);
     setEditingId(null);
   };
