@@ -27,6 +27,7 @@ const EXPENSE_ICONS: Record<string, IconName> = {
   'Штрафы/пени': 'warning-outline',
   'Благотворительность': 'heart-circle-outline',
   'Фотосессия': 'camera-outline',
+  'Перевод на счёт': 'swap-horizontal-outline',
 };
 
 const INCOME_ICONS: Record<string, IconName> = {

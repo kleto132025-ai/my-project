@@ -13,6 +13,7 @@ import { useTheme } from '../../theme';
 import { spacing } from '../../theme';
 import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useFreeFunds } from '../../hooks/useFinancials';
 import { formatCurrency, formatNumber } from '../../utils/format';
 import { calculateGoalProgress } from '../../utils/calculations';
 import { convertAmount } from '../../utils/currency';
@@ -79,8 +80,12 @@ export function SavingsScreen() {
   const removeSavingsAccount = useFinanceStore((s) => s.removeSavingsAccount);
   const removeInvestment = useFinanceStore((s) => s.removeInvestment);
   const transferSavingsAccountToCash = useFinanceStore((s) => s.transferSavingsAccountToCash);
+  const depositToSavingsAccountFromCash = useFinanceStore((s) => s.depositToSavingsAccountFromCash);
+  const freeFunds = useFreeFunds();
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [transferAmount, setTransferAmount] = useState('');
+  const [depositAccountId, setDepositAccountId] = useState<string | null>(null);
+  const [depositAmount, setDepositAmount] = useState('');
   const [expandedInvestmentId, setExpandedInvestmentId] = useState<string | null>(null);
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutDate, setPayoutDate] = useState(new Date());
@@ -179,6 +184,29 @@ export function SavingsScreen() {
     await transferSavingsAccountToCash(account.id, value);
     setTransferAmount('');
     setExpandedAccountId(null);
+  };
+
+  // Обратная операция — пополнение накопительного счёта с дохода/текущего остатка:
+  // одним действием увеличивает баланс счёта и добавляет транзакцию-расход на ту же сумму.
+  // Сумма ограничена доступным "Остатком ДС" (доходы минус расходы), чтобы пополнение не
+  // ушло в минус текущий (кассовый) остаток.
+  const handleDepositFromCash = async (account: SavingsAccount) => {
+    const value = parseLocaleNumber(depositAmount);
+    if (Number.isNaN(value) || value <= 0) {
+      Alert.alert('Проверьте сумму', 'Введите сумму больше нуля');
+      return;
+    }
+    const availableInAccountCurrency = convertAmount(freeFunds, currency, account.currency, rates);
+    if (value > availableInAccountCurrency) {
+      Alert.alert(
+        'Сумма больше доступного остатка',
+        `Сейчас доступно ${formatCurrency(availableInAccountCurrency, account.currency)} — нельзя пополнить на большую сумму`
+      );
+      return;
+    }
+    await depositToSavingsAccountFromCash(account.id, value);
+    setDepositAmount('');
+    setDepositAccountId(null);
   };
 
   const startEditInvestment = (i: Investment) => {
@@ -536,14 +564,45 @@ export function SavingsScreen() {
                       {formatCurrency(convertAmount(lastAccrual.amount, a.currency, currency, rates), currency)}
                     </Text>
                   )}
-                  <AppButton
-                    title={expandedAccountId === a.id ? 'Скрыть' : 'Перевести на текущий счёт'}
-                    variant="outline"
-                    onPress={() => {
-                      setTransferAmount('');
-                      setExpandedAccountId(expandedAccountId === a.id ? null : a.id);
-                    }}
-                  />
+                  <View style={styles.accountActionsRow}>
+                    <View style={{ flex: 1 }}>
+                      <AppButton
+                        title={depositAccountId === a.id ? 'Скрыть' : 'Пополнить с дохода'}
+                        variant="outline"
+                        onPress={() => {
+                          setDepositAmount('');
+                          setDepositAccountId(depositAccountId === a.id ? null : a.id);
+                          setExpandedAccountId(null);
+                        }}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <AppButton
+                        title={expandedAccountId === a.id ? 'Скрыть' : 'Перевести на текущий счёт'}
+                        variant="outline"
+                        onPress={() => {
+                          setTransferAmount('');
+                          setExpandedAccountId(expandedAccountId === a.id ? null : a.id);
+                          setDepositAccountId(null);
+                        }}
+                      />
+                    </View>
+                  </View>
+                  {depositAccountId === a.id && (
+                    <View style={{ marginTop: spacing.sm }}>
+                      <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+                        Сумма спишется с текущего (кассового) остатка — «Остаток ДС» в Доходах/
+                        Расходах — и добавится расходом «Перевод на счёт», а баланс счёта увеличится.
+                      </Text>
+                      <FormInput
+                        label={`Сумма (доступно ${formatCurrency(convertAmount(freeFunds, currency, a.currency, rates), a.currency)})`}
+                        keyboardType="decimal-pad"
+                        value={depositAmount}
+                        onChangeText={setDepositAmount}
+                      />
+                      <AppButton title="Пополнить" onPress={() => handleDepositFromCash(a)} />
+                    </View>
+                  )}
                   {expandedAccountId === a.id && (
                     <View style={{ marginTop: spacing.sm }}>
                       <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
@@ -812,5 +871,6 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 0 },
   scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  accountActionsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   moexResultRow: { borderWidth: 1, borderRadius: 8, padding: spacing.sm, marginBottom: 6 },
 });

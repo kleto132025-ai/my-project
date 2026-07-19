@@ -296,6 +296,47 @@ describe('financeStore.transferSavingsAccountToCash', () => {
   });
 });
 
+describe('financeStore.depositToSavingsAccountFromCash', () => {
+  function makeAccount(overrides: Partial<SavingsAccount> = {}): SavingsAccount {
+    return {
+      id: 'acc-1', name: 'Копилка', balance: 10000, rate: 12,
+      lastAccrualDate: new Date('2026-01-01'), currency: 'RUB',
+      ...overrides,
+    };
+  }
+
+  it('increases the balance and adds a matching cash-expense transaction', async () => {
+    useFinanceStore.setState({ savingsAccounts: [makeAccount({ balance: 10000 })] });
+
+    await useFinanceStore.getState().depositToSavingsAccountFromCash('acc-1', 4000);
+
+    const { savingsAccounts, transactions } = useFinanceStore.getState();
+    expect(savingsAccounts[0].balance).toBe(14000);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]).toMatchObject({ amount: 4000, type: 'expense', category: 'Перевод на счёт' });
+    expect(repo.upsertSavingsAccount).toHaveBeenCalledWith(expect.objectContaining({ balance: 14000 }));
+    expect(repo.insertTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: 4000 }));
+  });
+
+  it('refuses a zero or negative amount', async () => {
+    useFinanceStore.setState({ savingsAccounts: [makeAccount({ balance: 1000 })] });
+
+    await useFinanceStore.getState().depositToSavingsAccountFromCash('acc-1', 0);
+
+    expect(useFinanceStore.getState().savingsAccounts[0].balance).toBe(1000);
+    expect(repo.upsertSavingsAccount).not.toHaveBeenCalled();
+  });
+
+  it('ignores an unknown account', async () => {
+    useFinanceStore.setState({ savingsAccounts: [makeAccount()] });
+
+    await useFinanceStore.getState().depositToSavingsAccountFromCash('missing', 100);
+
+    expect(repo.upsertSavingsAccount).not.toHaveBeenCalled();
+    expect(repo.insertTransaction).not.toHaveBeenCalled();
+  });
+});
+
 describe('financeStore.resetAll', () => {
   it('wipes the database, re-marks demo data as seeded, and clears in-memory state', async () => {
     useFinanceStore.setState({ transactions: [{ id: 't1' }] as any, isLoaded: true });

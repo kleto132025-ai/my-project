@@ -99,6 +99,12 @@ interface FinanceState {
    * чтобы это не пришлось вручную дублировать в двух разных разделах и не разойтись местами.
    */
   transferSavingsAccountToCash: (accountId: string, amount: number) => Promise<void>;
+  /**
+   * Обратная операция — пополнение накопительного счёта с текущего (кассового) остатка:
+   * увеличивает баланс счёта и одной операцией добавляет транзакцию-расход на ту же сумму,
+   * чтобы пополнение не пришлось вручную дублировать в двух разных разделах.
+   */
+  depositToSavingsAccountFromCash: (accountId: string, amount: number) => Promise<void>;
 
   saveInvestment: (i: Investment | Omit<Investment, 'id'>) => Promise<void>;
   removeInvestment: (id: string) => Promise<void>;
@@ -456,6 +462,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       type: 'income',
       date: new Date(),
       comment: `Перевод с накопительного счёта «${account.name}»`,
+      currency: account.currency,
+    };
+    await repo.upsertSavingsAccount(updatedAccount);
+    await repo.insertTransaction(transaction);
+    set((state) => ({
+      savingsAccounts: state.savingsAccounts.map((a) => (a.id === accountId ? updatedAccount : a)),
+      transactions: [transaction, ...state.transactions],
+    }));
+  },
+
+  depositToSavingsAccountFromCash: async (accountId, amount) => {
+    const account = get().savingsAccounts.find((a) => a.id === accountId);
+    // Не превышает ли пополнение доступный кассовый остаток — проверяется на экране (там
+    // есть конвертация валют для сравнения с "Остаток ДС"); здесь просто отсекаем некорректную
+    // сумму, даже если что-то передадут напрямую в обход экрана.
+    if (!account || amount <= 0) return;
+
+    const updatedAccount: SavingsAccount = { ...account, balance: account.balance + amount };
+    const transaction: Transaction = {
+      id: generateId(),
+      amount,
+      category: 'Перевод на счёт',
+      type: 'expense',
+      date: new Date(),
+      comment: `Пополнение накопительного счёта «${account.name}»`,
       currency: account.currency,
     };
     await repo.upsertSavingsAccount(updatedAccount);
