@@ -20,6 +20,12 @@ const EXPENSE_ICONS: Record<string, IconName> = {
   'Подарки': 'gift-outline',
   'Спорт': 'barbell-outline',
   'Рабочие обеды': 'fast-food-outline',
+  'Такси': 'car-sport-outline',
+  'Красота и уход': 'sparkles-outline',
+  'Питомцы': 'paw-outline',
+  'Хобби': 'color-palette-outline',
+  'Штрафы/пени': 'warning-outline',
+  'Благотворительность': 'heart-circle-outline',
 };
 
 const INCOME_ICONS: Record<string, IconName> = {

@@ -16,4 +16,12 @@ describe('suggestCategory', () => {
   it('returns undefined for empty comment', () => {
     expect(suggestCategory('', 'expense')).toBeUndefined();
   });
+
+  it('categorizes taxi as "Такси" and not "Транспорт"', () => {
+    expect(suggestCategory('Такси до дома', 'expense')).toBe('Такси');
+  });
+
+  it('still categorizes public transport as "Транспорт"', () => {
+    expect(suggestCategory('Проезд на автобусе', 'expense')).toBe('Транспорт');
+  });
 });
