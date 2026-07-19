@@ -73,7 +73,7 @@ jest.mock('../database/client', () => ({
 import { useFinanceStore } from '../store/financeStore';
 import * as repo from '../database/repository';
 import { setMeta } from '../database/client';
-import type { Credit, CreditRepayment, Goal, SavingsAccount } from '../types';
+import type { Credit, CreditRepayment, Goal, SavingsAccount, Investment, CashbackCard } from '../types';
 
 const initialState = useFinanceStore.getState();
 
@@ -469,5 +469,91 @@ describe('financeStore.importBackup', () => {
 
     await expect(useFinanceStore.getState().importBackup({ notifications: [notification] })).resolves.toBeUndefined();
     expect(repo.insertNotification).toHaveBeenCalledWith(notification);
+  });
+});
+
+function makeInvestment(overrides: Partial<Investment> = {}): Investment {
+  return {
+    id: 'inv-1', name: 'Сбербанк', assetType: 'stock', quantity: 10,
+    purchasePrice: 250, currentPrice: 300, currency: 'RUB',
+    ...overrides,
+  };
+}
+
+describe('financeStore investment payouts', () => {
+  it('addInvestmentPayout also records a linked income transaction', async () => {
+    useFinanceStore.setState({ investments: [makeInvestment()] });
+
+    await useFinanceStore.getState().addInvestmentPayout('inv-1', 500, new Date('2026-03-01'));
+
+    const { investmentPayouts, transactions } = useFinanceStore.getState();
+    expect(investmentPayouts[0]).toMatchObject({ amount: 500, investmentId: 'inv-1' });
+    expect(transactions[0]).toMatchObject({ amount: 500, type: 'income', category: 'Инвестиции', currency: 'RUB' });
+    expect(investmentPayouts[0].transactionId).toBe(transactions[0].id);
+  });
+
+  it('editInvestmentPayout keeps the linked transaction in sync', async () => {
+    const payout = { id: 'p1', investmentId: 'inv-1', date: new Date('2026-03-01'), amount: 500, transactionId: 'tx-1' };
+    const transaction = {
+      id: 'tx-1', amount: 500, category: 'Инвестиции', type: 'income' as const,
+      date: new Date('2026-03-01'), currency: 'RUB' as const,
+    };
+    useFinanceStore.setState({ investments: [makeInvestment()], investmentPayouts: [payout], transactions: [transaction] });
+
+    await useFinanceStore.getState().editInvestmentPayout('p1', 700, new Date('2026-03-05'));
+
+    const { transactions: updated } = useFinanceStore.getState();
+    expect(updated[0]).toMatchObject({ id: 'tx-1', amount: 700, date: new Date('2026-03-05') });
+  });
+
+  it('removeInvestmentPayout also removes the linked transaction', async () => {
+    const payout = { id: 'p1', investmentId: 'inv-1', date: new Date('2026-03-01'), amount: 500, transactionId: 'tx-1' };
+    const transaction = {
+      id: 'tx-1', amount: 500, category: 'Инвестиции', type: 'income' as const,
+      date: new Date('2026-03-01'), currency: 'RUB' as const,
+    };
+    useFinanceStore.setState({ investments: [makeInvestment()], investmentPayouts: [payout], transactions: [transaction] });
+
+    await useFinanceStore.getState().removeInvestmentPayout('p1');
+
+    const { transactions: remaining } = useFinanceStore.getState();
+    expect(remaining).toHaveLength(0);
+    expect(repo.deleteTransaction).toHaveBeenCalledWith('tx-1');
+  });
+});
+
+function makeCashbackCard(overrides: Partial<CashbackCard> = {}): CashbackCard {
+  return { id: 'cb-1', name: 'Тинькофф Блэк', cashbackPercent: 5, accumulated: 1000, ...overrides };
+}
+
+describe('financeStore cashback', () => {
+  it('accrueCashback increases the accumulated balance without creating a transaction', async () => {
+    useFinanceStore.setState({ cashbackCards: [makeCashbackCard({ accumulated: 1000 })] });
+
+    await useFinanceStore.getState().accrueCashback('cb-1', 200);
+
+    const { cashbackCards, transactions } = useFinanceStore.getState();
+    expect(cashbackCards[0].accumulated).toBe(1200);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it('redeemCashback decreases the balance and adds an income transaction', async () => {
+    useFinanceStore.setState({ cashbackCards: [makeCashbackCard({ accumulated: 1000 })] });
+
+    await useFinanceStore.getState().redeemCashback('cb-1', 400);
+
+    const { cashbackCards, transactions } = useFinanceStore.getState();
+    expect(cashbackCards[0].accumulated).toBe(600);
+    expect(transactions[0]).toMatchObject({ amount: 400, type: 'income', category: 'Кэшбэк' });
+  });
+
+  it('refuses to redeem more than is accumulated', async () => {
+    useFinanceStore.setState({ cashbackCards: [makeCashbackCard({ accumulated: 100 })] });
+
+    await useFinanceStore.getState().redeemCashback('cb-1', 500);
+
+    const { cashbackCards, transactions } = useFinanceStore.getState();
+    expect(cashbackCards[0].accumulated).toBe(100);
+    expect(transactions).toHaveLength(0);
   });
 });

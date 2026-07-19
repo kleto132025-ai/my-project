@@ -72,6 +72,8 @@ export function CreditsScreen() {
   const makePayment = useFinanceStore((s) => s.makePayment);
   const editCreditRepayment = useFinanceStore((s) => s.editCreditRepayment);
   const removeCreditRepayment = useFinanceStore((s) => s.removeCreditRepayment);
+  const transactions = useFinanceStore((s) => s.transactions);
+  const addTransaction = useFinanceStore((s) => s.addTransaction);
 
   const credits = useMemo(() => allCredits.filter((c) => c.kind === 'credit'), [allCredits]);
   const mortgages = useMemo(() => allCredits.filter((c) => c.kind === 'mortgage'), [allCredits]);
@@ -318,6 +320,43 @@ export function CreditsScreen() {
       }
     }
     resetForm();
+  };
+
+  // Отмечает взнос по страховке как оплаченный — сразу добавляет расход в Доходах/Расходах,
+  // чтобы не вносить его отдельно вручную. Как и с регулярными платежами, при повторном взносе
+  // в том же месяце спрашиваем подтверждение, а не блокируем и не плодим дубликат молча.
+  const handleMarkInsurancePaid = async (policy: InsurancePolicy) => {
+    const now = new Date();
+    const alreadyThisMonth = transactions.some(
+      (t) =>
+        t.category === 'Страховка' &&
+        t.type === 'expense' &&
+        t.amount === policy.amount &&
+        t.comment === `${policy.type} — ${policy.insurer}` &&
+        t.date.getFullYear() === now.getFullYear() &&
+        t.date.getMonth() === now.getMonth()
+    );
+    const doAdd = () =>
+      addTransaction({
+        amount: policy.amount,
+        category: 'Страховка',
+        type: 'expense',
+        date: now,
+        comment: `${policy.type} — ${policy.insurer}`,
+        currency,
+      });
+    if (alreadyThisMonth) {
+      Alert.alert(
+        'Уже отмечено в этом месяце',
+        `Взнос по «${policy.type}» уже отмечался в этом месяце. Всё равно добавить ещё раз?`,
+        [
+          { text: 'Отмена', style: 'cancel' },
+          { text: 'Всё равно добавить', onPress: doAdd },
+        ]
+      );
+      return;
+    }
+    await doAdd();
   };
 
   const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -786,6 +825,9 @@ export function CreditsScreen() {
                     Ипотека: {allCredits.find((c) => c.id === p.creditId)?.name ?? '—'}
                   </Text>
                 )}
+                <View style={{ marginTop: spacing.sm }}>
+                  <AppButton title="Отметить оплаченным" variant="outline" onPress={() => handleMarkInsurancePaid(p)} />
+                </View>
               </Card>
             ))
           )}

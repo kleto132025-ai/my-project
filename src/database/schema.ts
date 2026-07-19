@@ -103,7 +103,8 @@ CREATE TABLE IF NOT EXISTS investment_payouts (
   id TEXT PRIMARY KEY NOT NULL,
   investmentId TEXT NOT NULL,
   date TEXT NOT NULL,
-  amount REAL NOT NULL
+  amount REAL NOT NULL,
+  transactionId TEXT
 );
 
 -- Накопительный счёт: в отличие от вклада (deposits), без даты закрытия — остаток может

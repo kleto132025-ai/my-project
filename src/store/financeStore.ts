@@ -24,6 +24,7 @@ import type {
 import * as repo from '../database/repository';
 import { seedDemoDataIfNeeded, SEED_FLAG_KEY } from '../database/seed';
 import { setMeta } from '../database/client';
+import { useSettingsStore } from './settingsStore';
 import { calculateGoalProgress, calculateAmortizationStep, calculateMonthlyInterest, monthsElapsed } from '../utils/calculations';
 import type { BackupData } from '../utils/backup';
 
@@ -130,6 +131,14 @@ interface FinanceState {
 
   saveCashbackCard: (c: CashbackCard | Omit<CashbackCard, 'id'>) => Promise<void>;
   removeCashbackCard: (id: string) => Promise<void>;
+  /** Банк начислил кэшбэк на карту — просто увеличивает накопленное, без движения кассы. */
+  accrueCashback: (cardId: string, amount: number) => Promise<void>;
+  /**
+   * Обналичивание кэшбэка — уменьшает накопленное на карте и одной операцией добавляет
+   * транзакцию-доход с категорией "Кэшбэк" на ту же сумму, чтобы деньги реально появились
+   * в Доходах/Расходах, а не только числились накопленными на карте.
+   */
+  redeemCashback: (cardId: string, amount: number) => Promise<void>;
 
   unlockAchievement: (id: string) => Promise<void>;
 
@@ -566,7 +575,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   addInvestmentPayout: async (investmentId, amount, date) => {
     if (amount <= 0) return;
+    const investment = get().investments.find((i) => i.id === investmentId);
     const payout: InvestmentPayout = { id: generateId(), investmentId, date, amount };
+
+    // Выплата зачисляется сразу как доход в Доходах/Расходах — деньги реально приходят на
+    // счёт, а раньше это нигде не отражалось, кроме истории выплат по конкретному активу.
+    if (investment) {
+      const transaction: Transaction = {
+        id: generateId(),
+        amount,
+        category: 'Инвестиции',
+        type: 'income',
+        date,
+        comment: `Выплата по активу «${investment.name}»`,
+        currency: investment.currency,
+      };
+      payout.transactionId = transaction.id;
+      await repo.insertTransaction(transaction);
+      await repo.insertInvestmentPayout(payout);
+      set((state) => ({
+        investmentPayouts: [payout, ...state.investmentPayouts],
+        transactions: [transaction, ...state.transactions],
+      }));
+      return;
+    }
+
     await repo.insertInvestmentPayout(payout);
     set((state) => ({ investmentPayouts: [payout, ...state.investmentPayouts] }));
   },
@@ -576,13 +609,33 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     if (!existing) return;
     const updated: InvestmentPayout = { ...existing, amount, date };
     await repo.updateInvestmentPayout(updated);
+
+    const linkedTransaction = existing.transactionId
+      ? get().transactions.find((t) => t.id === existing.transactionId)
+      : undefined;
+    let updatedTransaction: Transaction | undefined;
+    if (linkedTransaction) {
+      updatedTransaction = { ...linkedTransaction, amount, date };
+      await repo.updateTransaction(updatedTransaction);
+    }
+
     set((state) => ({
       investmentPayouts: state.investmentPayouts.map((p) => (p.id === payoutId ? updated : p)),
+      transactions: updatedTransaction
+        ? state.transactions.map((t) => (t.id === updatedTransaction!.id ? updatedTransaction! : t))
+        : state.transactions,
     }));
   },
   removeInvestmentPayout: async (payoutId) => {
+    const existing = get().investmentPayouts.find((p) => p.id === payoutId);
     await repo.deleteInvestmentPayout(payoutId);
-    set((state) => ({ investmentPayouts: state.investmentPayouts.filter((p) => p.id !== payoutId) }));
+    if (existing?.transactionId) await repo.deleteTransaction(existing.transactionId);
+    set((state) => ({
+      investmentPayouts: state.investmentPayouts.filter((p) => p.id !== payoutId),
+      transactions: existing?.transactionId
+        ? state.transactions.filter((t) => t.id !== existing.transactionId)
+        : state.transactions,
+    }));
   },
 
   saveFriendDebt: async (d) => {
@@ -659,6 +712,37 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
   removeCashbackCard: async (id) => {
     await repo.deleteCashbackCard(id);
     set((state) => ({ cashbackCards: state.cashbackCards.filter((c) => c.id !== id) }));
+  },
+
+  accrueCashback: async (cardId, amount) => {
+    const card = get().cashbackCards.find((c) => c.id === cardId);
+    if (!card || amount <= 0) return;
+    const updated: CashbackCard = { ...card, accumulated: card.accumulated + amount };
+    await repo.upsertCashbackCard(updated);
+    set((state) => ({ cashbackCards: state.cashbackCards.map((c) => (c.id === cardId ? updated : c)) }));
+  },
+
+  redeemCashback: async (cardId, amount) => {
+    const card = get().cashbackCards.find((c) => c.id === cardId);
+    // Обналичить можно не больше, чем реально накоплено на карте — иначе накопленное ушло бы в минус.
+    if (!card || amount <= 0 || amount > card.accumulated) return;
+
+    const updatedCard: CashbackCard = { ...card, accumulated: card.accumulated - amount };
+    const transaction: Transaction = {
+      id: generateId(),
+      amount,
+      category: 'Кэшбэк',
+      type: 'income',
+      date: new Date(),
+      comment: `Обналичен кэшбэк с карты «${card.name}»`,
+      currency: useSettingsStore.getState().currency,
+    };
+    await repo.upsertCashbackCard(updatedCard);
+    await repo.insertTransaction(transaction);
+    set((state) => ({
+      cashbackCards: state.cashbackCards.map((c) => (c.id === cardId ? updatedCard : c)),
+      transactions: [transaction, ...state.transactions],
+    }));
   },
 
   unlockAchievement: async (id) => {

@@ -345,29 +345,32 @@ export async function deleteInvestment(id: string): Promise<void> {
 
 // ---------- Investment payouts (дивиденды / купоны) ----------
 
-type InvestmentPayoutRow = Omit<InvestmentPayout, 'date'> & { date: string };
+type InvestmentPayoutRow = Omit<InvestmentPayout, 'date' | 'transactionId'> & {
+  date: string;
+  transactionId: string | null;
+};
 
 export async function listInvestmentPayouts(): Promise<InvestmentPayout[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<InvestmentPayoutRow>(
     'SELECT * FROM investment_payouts ORDER BY date DESC;'
   );
-  return rows.map((r) => ({ ...r, date: new Date(r.date) }));
+  return rows.map((r) => ({ ...r, date: new Date(r.date), transactionId: r.transactionId ?? undefined }));
 }
 
 export async function insertInvestmentPayout(p: InvestmentPayout): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO investment_payouts (id, investmentId, date, amount) VALUES (?, ?, ?, ?);`,
-    [p.id, p.investmentId, p.date.toISOString(), p.amount]
+    `INSERT INTO investment_payouts (id, investmentId, date, amount, transactionId) VALUES (?, ?, ?, ?, ?);`,
+    [p.id, p.investmentId, p.date.toISOString(), p.amount, p.transactionId ?? null]
   );
 }
 
 export async function updateInvestmentPayout(p: InvestmentPayout): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE investment_payouts SET date = ?, amount = ? WHERE id = ?;`,
-    [p.date.toISOString(), p.amount, p.id]
+    `UPDATE investment_payouts SET date = ?, amount = ?, transactionId = ? WHERE id = ?;`,
+    [p.date.toISOString(), p.amount, p.transactionId ?? null, p.id]
   );
 }
 

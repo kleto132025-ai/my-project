@@ -27,6 +27,8 @@ export function RegularPaymentsScreen() {
   const regularPayments = useFinanceStore((s) => s.regularPayments);
   const saveRegularPayment = useFinanceStore((s) => s.saveRegularPayment);
   const removeRegularPayment = useFinanceStore((s) => s.removeRegularPayment);
+  const transactions = useFinanceStore((s) => s.transactions);
+  const addTransaction = useFinanceStore((s) => s.addTransaction);
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -109,6 +111,45 @@ export function RegularPaymentsScreen() {
     resetForm();
   };
 
+  // Отмечает платёж как оплаченный/полученный этот месяц — сразу добавляет соответствующую
+  // транзакцию в Доходах/Расходах, чтобы не приходилось вносить её отдельно вручную. Если в
+  // этом календарном месяце уже есть точно такая же запись (по сумме, категории и названию),
+  // предупреждаем перед повторным добавлением — не блокируем совсем, вдруг это правда второй
+  // платёж (например, доплата), но и не плодим дубликаты по нажатию мимо.
+  const handleMarkPaid = async (payment: RegularPayment) => {
+    const now = new Date();
+    const alreadyThisMonth = transactions.some(
+      (t) =>
+        t.category === payment.category &&
+        t.type === payment.type &&
+        t.amount === payment.amount &&
+        t.comment === payment.name &&
+        t.date.getFullYear() === now.getFullYear() &&
+        t.date.getMonth() === now.getMonth()
+    );
+    const doAdd = () =>
+      addTransaction({
+        amount: payment.amount,
+        category: payment.category,
+        type: payment.type,
+        date: now,
+        comment: payment.name,
+        currency,
+      });
+    if (alreadyThisMonth) {
+      Alert.alert(
+        'Уже отмечено в этом месяце',
+        `«${payment.name}» уже отмечался в этом месяце. Всё равно добавить ещё раз?`,
+        [
+          { text: 'Отмена', style: 'cancel' },
+          { text: 'Всё равно добавить', onPress: doAdd },
+        ]
+      );
+      return;
+    }
+    await doAdd();
+  };
+
   const isEditing = editingId !== null;
 
   return (
@@ -139,6 +180,15 @@ export function RegularPaymentsScreen() {
               {p.dayOfMonthEnd ? `можно оплатить ${p.dayOfMonth}–${p.dayOfMonthEnd} числа` : `оплата ${p.dayOfMonth} числа`}
               {!p.isActive ? ' · отключён' : ''}
             </Text>
+            {p.isActive && (
+              <View style={{ marginTop: spacing.sm }}>
+                <AppButton
+                  title={p.type === 'expense' ? 'Отметить оплаченным' : 'Отметить получено'}
+                  variant="outline"
+                  onPress={() => handleMarkPaid(p)}
+                />
+              </View>
+            )}
           </Card>
         ))
       )}

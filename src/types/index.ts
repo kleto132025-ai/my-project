@@ -145,6 +145,8 @@ export interface InvestmentPayout {
   investmentId: string;
   date: Date;
   amount: number;
+  /** Связанная транзакция-доход в Доходах/Расходах — выплата зачисляется автоматически. */
+  transactionId?: string;
 }
 
 export type DebtStatus = 'owed_to_me' | 'i_owe';

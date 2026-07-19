@@ -94,6 +94,11 @@ export function SavingsScreen() {
   const [payoutEditDate, setPayoutEditDate] = useState(new Date());
   const removeGoal = useFinanceStore((s) => s.removeGoal);
   const removeCashbackCard = useFinanceStore((s) => s.removeCashbackCard);
+  const accrueCashback = useFinanceStore((s) => s.accrueCashback);
+  const redeemCashback = useFinanceStore((s) => s.redeemCashback);
+  const [cashbackActionId, setCashbackActionId] = useState<string | null>(null);
+  const [cashbackActionMode, setCashbackActionMode] = useState<'accrue' | 'redeem'>('accrue');
+  const [cashbackActionAmount, setCashbackActionAmount] = useState('');
 
   // form state (generic fields reused across segments)
   const [name, setName] = useState('');
@@ -391,6 +396,31 @@ export function SavingsScreen() {
       accumulated: existing?.accumulated ?? 0,
     } as CashbackCard);
     resetForm();
+  };
+
+  // "Начислить" — банк зачислил кэшбэк на карту, просто увеличивает накопленное (деньги ещё
+  // не "на руках"). "Обналичить" — реальное получение денег, списывает с накопленного и сразу
+  // добавляет доход "Кэшбэк" в Доходах/Расходах, чтобы не вносить его отдельно вручную.
+  const handleCashbackAction = async (card: CashbackCard) => {
+    const value = parseLocaleNumber(cashbackActionAmount);
+    if (Number.isNaN(value) || value <= 0) {
+      Alert.alert('Проверьте сумму', 'Введите сумму больше нуля');
+      return;
+    }
+    if (cashbackActionMode === 'accrue') {
+      await accrueCashback(card.id, value);
+    } else {
+      if (value > card.accumulated) {
+        Alert.alert(
+          'Сумма больше накопленного',
+          `На карте «${card.name}» накоплено ${formatCurrency(card.accumulated, currency)} — нельзя обналичить больше`
+        );
+        return;
+      }
+      await redeemCashback(card.id, value);
+    }
+    setCashbackActionAmount('');
+    setCashbackActionId(null);
   };
 
   const isEditing = editingId !== null;
@@ -738,6 +768,9 @@ export function SavingsScreen() {
                       <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
                         Добавить {payoutLabel.toLowerCase()}
                       </Text>
+                      <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+                        Сумма автоматически появится доходом «Инвестиции» в Доходах/Расходах.
+                      </Text>
                       <FormInput
                         label="Сумма"
                         keyboardType="decimal-pad"
@@ -846,6 +879,49 @@ export function SavingsScreen() {
                 <Text style={{ color: theme.textMuted, marginTop: 4 }}>
                   Накоплено: {formatCurrency(c.accumulated, currency)}
                 </Text>
+                <View style={styles.accountActionsRow}>
+                  <View style={{ flex: 1 }}>
+                    <AppButton
+                      title={cashbackActionId === c.id && cashbackActionMode === 'accrue' ? 'Скрыть' : 'Начислить'}
+                      variant="outline"
+                      onPress={() => {
+                        setCashbackActionAmount('');
+                        setCashbackActionMode('accrue');
+                        setCashbackActionId(cashbackActionId === c.id && cashbackActionMode === 'accrue' ? null : c.id);
+                      }}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <AppButton
+                      title={cashbackActionId === c.id && cashbackActionMode === 'redeem' ? 'Скрыть' : 'Обналичить'}
+                      variant="outline"
+                      onPress={() => {
+                        setCashbackActionAmount('');
+                        setCashbackActionMode('redeem');
+                        setCashbackActionId(cashbackActionId === c.id && cashbackActionMode === 'redeem' ? null : c.id);
+                      }}
+                    />
+                  </View>
+                </View>
+                {cashbackActionId === c.id && (
+                  <View style={{ marginTop: spacing.sm }}>
+                    <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+                      {cashbackActionMode === 'accrue'
+                        ? 'Банк зачислил кэшбэк на карту — сумма просто добавится к накопленному.'
+                        : 'Сумма спишется с накопленного и появится доходом «Кэшбэк» в Доходах/Расходах.'}
+                    </Text>
+                    <FormInput
+                      label="Сумма"
+                      keyboardType="decimal-pad"
+                      value={cashbackActionAmount}
+                      onChangeText={setCashbackActionAmount}
+                    />
+                    <AppButton
+                      title={cashbackActionMode === 'accrue' ? 'Начислить' : 'Обналичить'}
+                      onPress={() => handleCashbackAction(c)}
+                    />
+                  </View>
+                )}
               </Card>
             ))
           )}
