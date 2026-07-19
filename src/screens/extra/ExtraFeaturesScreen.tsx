@@ -16,7 +16,7 @@ const ITEMS: { icon: React.ComponentProps<typeof Ionicons>['name']; title: strin
   { icon: 'bulb-outline', title: 'ИИ-аналитика', route: 'AiInsights', subtitle: 'Советы по экономии' },
   { icon: 'repeat-outline', title: 'Шаблоны трат', route: 'RecurringTemplates', subtitle: 'Регулярные платежи и напоминания' },
   { icon: 'calculator-outline', title: 'Налоговый вычет', route: 'TaxCalculator', subtitle: 'Расчёт вычета 13%' },
-  { icon: 'trending-up-outline', title: 'Планировщик финансов', route: 'FinancialPlanner', subtitle: 'Прогноз баланса' },
+  { icon: 'trending-up-outline', title: 'Планировщик финансов', route: 'FinancialPlanner', subtitle: 'Сколько откладывать и на чём сэкономить' },
   { icon: 'people-outline', title: 'Мультипрофиль', route: 'MultiProfile', subtitle: 'Личный / бизнес / семейный' },
 ];
 
