@@ -29,6 +29,9 @@ const EXPENSE_ICONS: Record<string, IconName> = {
   'Благотворительность': 'heart-circle-outline',
   'Фотосессия': 'camera-outline',
   'Перевод на счёт': 'swap-horizontal-outline',
+  'Кредитная карта': 'card-outline',
+  'Кредит': 'trending-down-outline',
+  'Ипотека': 'key-outline',
 };
 
 const INCOME_ICONS: Record<string, IconName> = {

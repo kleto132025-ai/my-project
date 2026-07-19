@@ -156,9 +156,10 @@ export async function deleteCredit(id: string): Promise<void> {
 
 // ---------- Credit repayments ----------
 
-type CreditRepaymentRow = Omit<CreditRepayment, 'date' | 'principalPortion'> & {
+type CreditRepaymentRow = Omit<CreditRepayment, 'date' | 'principalPortion' | 'transactionId'> & {
   date: string;
   principalPortion: number | null;
+  transactionId: string | null;
 };
 
 export async function listCreditRepayments(): Promise<CreditRepayment[]> {
@@ -168,23 +169,29 @@ export async function listCreditRepayments(): Promise<CreditRepayment[]> {
   );
   // principalPortion может быть NULL у записей, сделанных до появления этой колонки —
   // для них вся сумма считалась досрочным погашением тела кредита, так что amount и есть
-  // фактический разбор на основной долг.
-  return rows.map((r) => ({ ...r, date: new Date(r.date), principalPortion: r.principalPortion ?? r.amount }));
+  // фактический разбор на основной долг. transactionId аналогично NULL у записей, сделанных
+  // до появления автоматической связи с расходом.
+  return rows.map((r) => ({
+    ...r,
+    date: new Date(r.date),
+    principalPortion: r.principalPortion ?? r.amount,
+    transactionId: r.transactionId ?? undefined,
+  }));
 }
 
 export async function insertCreditRepayment(r: CreditRepayment): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO credit_repayments (id, creditId, date, amount, type, principalPortion) VALUES (?, ?, ?, ?, ?, ?);`,
-    [r.id, r.creditId, r.date.toISOString(), r.amount, r.type, r.principalPortion]
+    `INSERT INTO credit_repayments (id, creditId, date, amount, type, principalPortion, transactionId) VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [r.id, r.creditId, r.date.toISOString(), r.amount, r.type, r.principalPortion, r.transactionId ?? null]
   );
 }
 
 export async function updateCreditRepayment(r: CreditRepayment): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `UPDATE credit_repayments SET date = ?, amount = ?, type = ?, principalPortion = ? WHERE id = ?;`,
-    [r.date.toISOString(), r.amount, r.type, r.principalPortion, r.id]
+    `UPDATE credit_repayments SET date = ?, amount = ?, type = ?, principalPortion = ?, transactionId = ? WHERE id = ?;`,
+    [r.date.toISOString(), r.amount, r.type, r.principalPortion, r.transactionId ?? null, r.id]
   );
 }
 

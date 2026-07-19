@@ -253,6 +253,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const updatedCredit: Credit = { ...credit, remaining };
     await repo.upsertCredit(updatedCredit);
 
+    // Платёж списывается с текущего остатка автоматически — иначе пришлось бы вручную
+    // дублировать его отдельной записью в Доходах/Расходах, легко забыть или разойтись в сумме.
+    const transaction: Transaction = {
+      id: generateId(),
+      amount,
+      category: credit.kind === 'mortgage' ? 'Ипотека' : 'Кредит',
+      type: 'expense',
+      date,
+      comment: `Досрочное погашение: ${credit.name}`,
+      currency: credit.currency,
+    };
+    await repo.insertTransaction(transaction);
+
     const repayment: CreditRepayment = {
       id: generateId(),
       creditId,
@@ -260,12 +273,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       amount,
       type: isFull ? 'full' : 'partial',
       principalPortion,
+      transactionId: transaction.id,
     };
     await repo.insertCreditRepayment(repayment);
 
     set((state) => ({
       credits: state.credits.map((c) => (c.id === creditId ? updatedCredit : c)),
       creditRepayments: [repayment, ...state.creditRepayments],
+      transactions: [transaction, ...state.transactions],
     }));
     await get().checkAndUnlockAchievements();
   },
@@ -283,6 +298,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const updatedCredit: Credit = { ...credit, remaining: newRemaining, nextPaymentDate };
     await repo.upsertCredit(updatedCredit);
 
+    // Платёж списывается с текущего остатка автоматически — иначе пришлось бы вручную
+    // дублировать его отдельной записью в Доходах/Расходах, легко забыть или разойтись в сумме.
+    const transaction: Transaction = {
+      id: generateId(),
+      amount,
+      category: credit.kind === 'mortgage' ? 'Ипотека' : 'Кредит',
+      type: 'expense',
+      date,
+      comment: `Платёж: ${credit.name}`,
+      currency: credit.currency,
+    };
+    await repo.insertTransaction(transaction);
+
     const repayment: CreditRepayment = {
       id: generateId(),
       creditId,
@@ -290,12 +318,14 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       amount,
       type: isFull ? 'full' : 'regular',
       principalPortion,
+      transactionId: transaction.id,
     };
     await repo.insertCreditRepayment(repayment);
 
     set((state) => ({
       credits: state.credits.map((c) => (c.id === creditId ? updatedCredit : c)),
       creditRepayments: [repayment, ...state.creditRepayments],
+      transactions: [transaction, ...state.transactions],
     }));
     await get().checkAndUnlockAchievements();
   },
@@ -329,9 +359,23 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     await repo.upsertCredit(updatedCredit);
     await repo.updateCreditRepayment(updatedRepayment);
 
+    // Держим связанную транзакцию-расход в согласии с суммой/датой платежа — иначе после
+    // редактирования погашения "Остаток ДС" продолжал бы отражать старую, уже неверную сумму.
+    const linkedTransaction = repayment.transactionId
+      ? get().transactions.find((t) => t.id === repayment.transactionId)
+      : undefined;
+    let updatedTransaction: Transaction | undefined;
+    if (linkedTransaction) {
+      updatedTransaction = { ...linkedTransaction, amount, date };
+      await repo.updateTransaction(updatedTransaction);
+    }
+
     set((state) => ({
       credits: state.credits.map((c) => (c.id === credit.id ? updatedCredit : c)),
       creditRepayments: state.creditRepayments.map((r) => (r.id === repaymentId ? updatedRepayment : r)),
+      transactions: updatedTransaction
+        ? state.transactions.map((t) => (t.id === updatedTransaction!.id ? updatedTransaction! : t))
+        : state.transactions,
     }));
   },
 
@@ -345,10 +389,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const updatedCredit: Credit = { ...credit, remaining };
     await repo.upsertCredit(updatedCredit);
     await repo.deleteCreditRepayment(repaymentId);
+    // Связанная транзакция-расход удаляется вместе с записью погашения — иначе в Доходах/
+    // Расходах осталась бы "осиротевшая" запись без соответствующего платежа по кредиту.
+    if (repayment.transactionId) await repo.deleteTransaction(repayment.transactionId);
 
     set((state) => ({
       credits: state.credits.map((c) => (c.id === credit.id ? updatedCredit : c)),
       creditRepayments: state.creditRepayments.filter((r) => r.id !== repaymentId),
+      transactions: repayment.transactionId
+        ? state.transactions.filter((t) => t.id !== repayment.transactionId)
+        : state.transactions,
     }));
   },
 

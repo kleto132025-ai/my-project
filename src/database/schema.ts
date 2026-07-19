@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS credit_repayments (
   date TEXT NOT NULL,
   amount REAL NOT NULL,
   type TEXT NOT NULL,
-  principalPortion REAL
+  principalPortion REAL,
+  transactionId TEXT
 );
 
 CREATE TABLE IF NOT EXISTS budget_limits (

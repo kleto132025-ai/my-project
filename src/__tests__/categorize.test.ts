@@ -32,4 +32,8 @@ describe('suggestCategory', () => {
   it('still categorizes a doctor visit as "Здоровье"', () => {
     expect(suggestCategory('Приём у врача', 'expense')).toBe('Здоровье');
   });
+
+  it('categorizes credit card spending as "Кредитная карта"', () => {
+    expect(suggestCategory('Оплата кредиткой', 'expense')).toBe('Кредитная карта');
+  });
 });

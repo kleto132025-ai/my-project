@@ -532,6 +532,10 @@ export function CreditsScreen() {
                 <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
                   Внести платёж
                 </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+                  Сумма автоматически появится расходом «{c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'}» в
+                  Доходах/Расходах — отдельно вносить её туда не нужно.
+                </Text>
                 <FormInput
                   label="Сумма платежа"
                   keyboardType="decimal-pad"
@@ -548,6 +552,10 @@ export function CreditsScreen() {
               <View style={{ marginTop: spacing.sm }}>
                 <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600', marginBottom: 4 }}>
                   Досрочное погашение
+                </Text>
+                <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+                  Сумма автоматически появится расходом «{c.kind === 'mortgage' ? 'Ипотека' : 'Кредит'}» в
+                  Доходах/Расходах — отдельно вносить её туда не нужно.
                 </Text>
                 <FormInput
                   label="Сумма досрочного погашения"

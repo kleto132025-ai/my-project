@@ -63,6 +63,9 @@ export interface CreditRepayment {
   type: CreditRepaymentType;
   /** Сколько из этой суммы реально ушло в счёт основного долга (остальное — проценты). */
   principalPortion: number;
+  /** Связанная транзакция-расход в Доходах/Расходах — платёж списывается с текущего
+   * остатка автоматически вместе с записью погашения. */
+  transactionId?: string;
 }
 
 export type BudgetPeriod = 'month' | 'quarter' | 'year';

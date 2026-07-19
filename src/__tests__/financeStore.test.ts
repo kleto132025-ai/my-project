@@ -161,6 +161,17 @@ describe('financeStore credit repayments', () => {
     expect(repo.insertCreditRepayment).toHaveBeenCalled();
   });
 
+  it('repayCredit also records a matching cash-expense transaction and links it', async () => {
+    useFinanceStore.setState({ credits: [makeCredit({ kind: 'mortgage' })] });
+    await useFinanceStore.getState().repayCredit('credit-1', 20000, new Date('2026-03-01'));
+
+    const { creditRepayments, transactions } = useFinanceStore.getState();
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]).toMatchObject({ amount: 20000, type: 'expense', category: 'Ипотека' });
+    expect(creditRepayments[0].transactionId).toBe(transactions[0].id);
+    expect(repo.insertTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: 20000 }));
+  });
+
   it('repayCredit marks the repayment as full once the balance reaches zero', async () => {
     useFinanceStore.setState({ credits: [makeCredit({ remaining: 5000 })] });
     await useFinanceStore.getState().repayCredit('credit-1', 5000, new Date('2026-03-01'));
@@ -182,11 +193,14 @@ describe('financeStore credit repayments', () => {
     useFinanceStore.setState({ credits: [makeCredit({ remaining: 100000, rate: 12, nextPaymentDate: new Date('2026-08-01') })] });
     await useFinanceStore.getState().makePayment('credit-1', 5000, new Date('2026-08-01'));
 
-    const { credits, creditRepayments } = useFinanceStore.getState();
+    const { credits, creditRepayments, transactions } = useFinanceStore.getState();
     // monthlyRate = 1% -> interest = 1000, principal = 4000
     expect(creditRepayments[0]).toMatchObject({ type: 'regular', principalPortion: 4000 });
     expect(credits[0].remaining).toBe(96000);
     expect(credits[0].nextPaymentDate.toISOString()).toBe(new Date('2026-09-01').toISOString());
+    // The full payment (interest + principal), not just the principal portion, leaves the cash balance.
+    expect(transactions[0]).toMatchObject({ amount: 5000, type: 'expense', category: 'Кредит' });
+    expect(creditRepayments[0].transactionId).toBe(transactions[0].id);
   });
 
   it('editCreditRepayment rolls back the old effect on remaining before applying the new amount', async () => {
@@ -216,6 +230,44 @@ describe('financeStore credit repayments', () => {
     const { credits, creditRepayments } = useFinanceStore.getState();
     expect(credits[0].remaining).toBe(100000);
     expect(creditRepayments).toHaveLength(0);
+  });
+
+  it('editCreditRepayment keeps the linked transaction amount/date in sync', async () => {
+    const credit = makeCredit({ remaining: 80000 });
+    const repayment: CreditRepayment = {
+      id: 'r1', creditId: 'credit-1', date: new Date('2026-03-01'), amount: 20000, type: 'partial',
+      principalPortion: 20000, transactionId: 'tx-1',
+    };
+    const transaction = {
+      id: 'tx-1', amount: 20000, category: 'Кредит', type: 'expense' as const,
+      date: new Date('2026-03-01'), currency: 'RUB' as const,
+    };
+    useFinanceStore.setState({ credits: [credit], creditRepayments: [repayment], transactions: [transaction] });
+
+    await useFinanceStore.getState().editCreditRepayment('r1', 30000, new Date('2026-03-05'));
+
+    const { transactions } = useFinanceStore.getState();
+    expect(transactions[0]).toMatchObject({ id: 'tx-1', amount: 30000, date: new Date('2026-03-05') });
+    expect(repo.updateTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: 30000 }));
+  });
+
+  it('removeCreditRepayment also removes the linked transaction', async () => {
+    const credit = makeCredit({ remaining: 80000 });
+    const repayment: CreditRepayment = {
+      id: 'r1', creditId: 'credit-1', date: new Date('2026-03-01'), amount: 20000, type: 'partial',
+      principalPortion: 20000, transactionId: 'tx-1',
+    };
+    const transaction = {
+      id: 'tx-1', amount: 20000, category: 'Кредит', type: 'expense' as const,
+      date: new Date('2026-03-01'), currency: 'RUB' as const,
+    };
+    useFinanceStore.setState({ credits: [credit], creditRepayments: [repayment], transactions: [transaction] });
+
+    await useFinanceStore.getState().removeCreditRepayment('r1');
+
+    const { transactions } = useFinanceStore.getState();
+    expect(transactions).toHaveLength(0);
+    expect(repo.deleteTransaction).toHaveBeenCalledWith('tx-1');
   });
 });
 
