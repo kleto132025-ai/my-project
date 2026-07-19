@@ -24,4 +24,12 @@ describe('suggestCategory', () => {
   it('still categorizes public transport as "Транспорт"', () => {
     expect(suggestCategory('Проезд на автобусе', 'expense')).toBe('Транспорт');
   });
+
+  it('categorizes pharmacy purchases as "Аптека" and not "Здоровье"', () => {
+    expect(suggestCategory('Купила лекарства в аптеке', 'expense')).toBe('Аптека');
+  });
+
+  it('still categorizes a doctor visit as "Здоровье"', () => {
+    expect(suggestCategory('Приём у врача', 'expense')).toBe('Здоровье');
+  });
 });

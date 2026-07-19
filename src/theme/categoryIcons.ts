@@ -11,6 +11,7 @@ const EXPENSE_ICONS: Record<string, IconName> = {
   'Бензин': 'car-outline',
   'Жильё': 'home-outline',
   'Здоровье': 'medkit-outline',
+  'Аптека': 'medical-outline',
   'Развлечения': 'game-controller-outline',
   'Образование': 'school-outline',
   'Рестораны': 'restaurant-outline',
