@@ -252,6 +252,50 @@ describe('financeStore.accrueSavingsInterest', () => {
   });
 });
 
+describe('financeStore.transferSavingsAccountToCash', () => {
+  function makeAccount(overrides: Partial<SavingsAccount> = {}): SavingsAccount {
+    return {
+      id: 'acc-1', name: 'Копилка', balance: 10000, rate: 12,
+      lastAccrualDate: new Date('2026-01-01'), currency: 'RUB',
+      ...overrides,
+    };
+  }
+
+  it('moves part of the balance into a cash-income transaction', async () => {
+    useFinanceStore.setState({ savingsAccounts: [makeAccount({ balance: 10000 })] });
+
+    await useFinanceStore.getState().transferSavingsAccountToCash('acc-1', 4000);
+
+    const { savingsAccounts, transactions } = useFinanceStore.getState();
+    expect(savingsAccounts[0].balance).toBe(6000);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]).toMatchObject({ amount: 4000, type: 'income', category: 'Перевод со счёта' });
+    expect(repo.upsertSavingsAccount).toHaveBeenCalledWith(expect.objectContaining({ balance: 6000 }));
+    expect(repo.insertTransaction).toHaveBeenCalledWith(expect.objectContaining({ amount: 4000 }));
+  });
+
+  it('refuses to push the balance below zero', async () => {
+    useFinanceStore.setState({ savingsAccounts: [makeAccount({ balance: 1000 })] });
+
+    await useFinanceStore.getState().transferSavingsAccountToCash('acc-1', 5000);
+
+    const { savingsAccounts, transactions } = useFinanceStore.getState();
+    expect(savingsAccounts[0].balance).toBe(1000);
+    expect(transactions).toHaveLength(0);
+    expect(repo.upsertSavingsAccount).not.toHaveBeenCalled();
+    expect(repo.insertTransaction).not.toHaveBeenCalled();
+  });
+
+  it('refuses a zero or negative amount', async () => {
+    useFinanceStore.setState({ savingsAccounts: [makeAccount({ balance: 1000 })] });
+
+    await useFinanceStore.getState().transferSavingsAccountToCash('acc-1', 0);
+
+    expect(useFinanceStore.getState().savingsAccounts[0].balance).toBe(1000);
+    expect(repo.upsertSavingsAccount).not.toHaveBeenCalled();
+  });
+});
+
 describe('financeStore.resetAll', () => {
   it('wipes the database, re-marks demo data as seeded, and clears in-memory state', async () => {
     useFinanceStore.setState({ transactions: [{ id: 't1' }] as any, isLoaded: true });

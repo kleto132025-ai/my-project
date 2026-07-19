@@ -93,6 +93,12 @@ interface FinanceState {
    * Вызывается автоматически при каждой загрузке данных.
    */
   accrueSavingsInterest: () => Promise<void>;
+  /**
+   * Перевод части остатка накопительного счёта на "текущий счёт" (в доходы/расходы) —
+   * уменьшает баланс счёта и одной операцией добавляет транзакцию-доход на ту же сумму,
+   * чтобы это не пришлось вручную дублировать в двух разных разделах и не разойтись местами.
+   */
+  transferSavingsAccountToCash: (accountId: string, amount: number) => Promise<void>;
 
   saveInvestment: (i: Investment | Omit<Investment, 'id'>) => Promise<void>;
   removeInvestment: (id: string) => Promise<void>;
@@ -432,6 +438,31 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     set((state) => ({
       savingsAccounts: updatedAccounts,
       savingsAccruals: [...newAccruals, ...state.savingsAccruals],
+    }));
+  },
+
+  transferSavingsAccountToCash: async (accountId, amount) => {
+    const account = get().savingsAccounts.find((a) => a.id === accountId);
+    // Проверка на превышение баланса — на экране, откуда вызывается это действие
+    // (сумма ≤ остатка); здесь просто не даём остатку уйти в минус, даже если что-то
+    // передадут напрямую в обход экрана.
+    if (!account || amount <= 0 || amount > account.balance) return;
+
+    const updatedAccount: SavingsAccount = { ...account, balance: account.balance - amount };
+    const transaction: Transaction = {
+      id: generateId(),
+      amount,
+      category: 'Перевод со счёта',
+      type: 'income',
+      date: new Date(),
+      comment: `Перевод с накопительного счёта «${account.name}»`,
+      currency: account.currency,
+    };
+    await repo.upsertSavingsAccount(updatedAccount);
+    await repo.insertTransaction(transaction);
+    set((state) => ({
+      savingsAccounts: state.savingsAccounts.map((a) => (a.id === accountId ? updatedAccount : a)),
+      transactions: [transaction, ...state.transactions],
     }));
   },
 

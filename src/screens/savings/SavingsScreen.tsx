@@ -78,6 +78,9 @@ export function SavingsScreen() {
   const removeDeposit = useFinanceStore((s) => s.removeDeposit);
   const removeSavingsAccount = useFinanceStore((s) => s.removeSavingsAccount);
   const removeInvestment = useFinanceStore((s) => s.removeInvestment);
+  const transferSavingsAccountToCash = useFinanceStore((s) => s.transferSavingsAccountToCash);
+  const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
+  const [transferAmount, setTransferAmount] = useState('');
   const [expandedInvestmentId, setExpandedInvestmentId] = useState<string | null>(null);
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutDate, setPayoutDate] = useState(new Date());
@@ -154,6 +157,28 @@ export function SavingsScreen() {
     setEntryCurrency(a.currency);
     setEditingId(a.id);
     setShowForm(true);
+  };
+
+  // Перевод части остатка накопительного счёта в доходы/расходы ("на текущий счёт") —
+  // одним действием уменьшает баланс счёта и добавляет транзакцию-доход на ту же сумму,
+  // чтобы остаток и список операций не пришлось сверять и вручную дублировать в двух местах.
+  // Сумма ограничена остатком счёта, поэтому уйти в минус он не может.
+  const handleTransferToCash = async (account: SavingsAccount) => {
+    const value = parseLocaleNumber(transferAmount);
+    if (Number.isNaN(value) || value <= 0) {
+      Alert.alert('Проверьте сумму', 'Введите сумму больше нуля');
+      return;
+    }
+    if (value > account.balance) {
+      Alert.alert(
+        'Сумма больше остатка',
+        `На счёте «${account.name}» сейчас ${formatCurrency(account.balance, account.currency)} — нельзя перевести больше`
+      );
+      return;
+    }
+    await transferSavingsAccountToCash(account.id, value);
+    setTransferAmount('');
+    setExpandedAccountId(null);
   };
 
   const startEditInvestment = (i: Investment) => {
@@ -494,6 +519,29 @@ export function SavingsScreen() {
                       Начислено {lastAccrual.date.toLocaleDateString('ru-RU')}: +
                       {formatCurrency(convertAmount(lastAccrual.amount, a.currency, currency, rates), currency)}
                     </Text>
+                  )}
+                  <AppButton
+                    title={expandedAccountId === a.id ? 'Скрыть' : 'Перевести на текущий счёт'}
+                    variant="outline"
+                    onPress={() => {
+                      setTransferAmount('');
+                      setExpandedAccountId(expandedAccountId === a.id ? null : a.id);
+                    }}
+                  />
+                  {expandedAccountId === a.id && (
+                    <View style={{ marginTop: spacing.sm }}>
+                      <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+                        Сумма спишется с остатка счёта и появится доходом «Перевод со счёта» в
+                        Доходах/Расходах — остаток и список операций обновятся сразу вместе.
+                      </Text>
+                      <FormInput
+                        label={`Сумма (доступно ${formatCurrency(a.balance, a.currency)})`}
+                        keyboardType="decimal-pad"
+                        value={transferAmount}
+                        onChangeText={setTransferAmount}
+                      />
+                      <AppButton title="Перевести" onPress={() => handleTransferToCash(a)} />
+                    </View>
                   )}
                 </Card>
               );

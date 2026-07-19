@@ -72,16 +72,28 @@ export function AddTransactionScreen() {
       Alert.alert('Проверьте данные', 'Укажите корректную сумму и категорию');
       return;
     }
-    if (
-      !editingTransaction &&
-      isDuplicateTransaction(candidate, transactions)
-    ) {
-      Alert.alert('Похожая запись уже есть', 'Такая транзакция уже была добавлена недавно');
+    // Предупреждение, а не жёсткий запрет: одинаковая сумма/категория в течение минуты обычно
+    // и правда случайная повторная отправка одной и той же записи, но это не всегда так —
+    // например, два одинаковых по сумме кофе подряд — вполне реальная ситуация, и раньше
+    // такую вторую запись невозможно было добавить вообще никак.
+    if (!editingTransaction && isDuplicateTransaction(candidate, transactions)) {
+      Alert.alert(
+        'Похожая запись уже есть',
+        'Такая транзакция уже была добавлена недавно. Всё равно добавить ещё одну?',
+        [
+          { text: 'Отмена', style: 'cancel' },
+          { text: 'Всё равно добавить', onPress: () => performSave(candidate, parsedAmount) },
+        ]
+      );
       return;
     }
 
+    await performSave(candidate, parsedAmount);
+  };
+
+  const performSave = async (candidate: Transaction, parsedAmount: number) => {
     if (editingTransaction) {
-      await editTransaction(candidate as Transaction);
+      await editTransaction(candidate);
     } else {
       await addTransaction({
         amount: parsedAmount,

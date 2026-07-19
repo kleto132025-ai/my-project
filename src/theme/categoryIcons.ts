@@ -18,6 +18,8 @@ const EXPENSE_ICONS: Record<string, IconName> = {
   'Подписки': 'repeat-outline',
   'Дом/Ремонт': 'hammer-outline',
   'Подарки': 'gift-outline',
+  'Спорт': 'barbell-outline',
+  'Рабочие обеды': 'fast-food-outline',
 };
 
 const INCOME_ICONS: Record<string, IconName> = {
@@ -30,6 +32,7 @@ const INCOME_ICONS: Record<string, IconName> = {
   'Аренда': 'business-outline',
   'Фриланс': 'laptop-outline',
   'Проценты по вкладам': 'stats-chart-outline',
+  'Перевод со счёта': 'swap-horizontal-outline',
 };
 
 export function getCategoryIcon(category: string, type: 'income' | 'expense' | 'transfer'): IconName {
