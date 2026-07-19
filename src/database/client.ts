@@ -26,6 +26,7 @@ const MIGRATION_STATEMENTS = [
   'ALTER TABLE regular_payments ADD COLUMN dayOfMonthEnd INTEGER;',
   'ALTER TABLE credit_repayments ADD COLUMN transactionId TEXT;',
   'ALTER TABLE investment_payouts ADD COLUMN transactionId TEXT;',
+  'ALTER TABLE wishlist_items ADD COLUMN goalId TEXT;',
 ];
 
 async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

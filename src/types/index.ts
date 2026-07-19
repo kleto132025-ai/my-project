@@ -188,6 +188,8 @@ export interface WishlistItem {
   priority: GoalPriority;
   status: WishStatus;
   savedAmount: number;
+  /** Привязка к финансовой цели — если задана, накопленная сумма берётся из цели, а не из savedAmount. */
+  goalId?: string;
 }
 
 export type NotificationType = 'payment' | 'limit' | 'goal' | 'report' | 'debt';

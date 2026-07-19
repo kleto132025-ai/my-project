@@ -151,7 +151,8 @@ CREATE TABLE IF NOT EXISTS wishlist_items (
   price REAL NOT NULL,
   priority TEXT NOT NULL,
   status TEXT NOT NULL,
-  savedAmount REAL NOT NULL DEFAULT 0
+  savedAmount REAL NOT NULL DEFAULT 0,
+  goalId TEXT
 );
 
 CREATE TABLE IF NOT EXISTS notifications (

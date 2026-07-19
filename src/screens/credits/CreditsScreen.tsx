@@ -359,6 +359,23 @@ export function CreditsScreen() {
     await doAdd();
   };
 
+  // Отмечает долг как закрытый — сразу добавляет соответствующую транзакцию (расход, если
+  // "Я должен" и я вернул долг; доход, если "Мне должны" и мне вернули) и ставит isPaid:true.
+  // В отличие от страховки/регулярных платежей, это разовое действие по конкретному долгу
+  // (гарантированно ещё не оплаченному — кнопка скрыта при isPaid), поэтому проверка на
+  // повторное добавление в этом месяце не нужна.
+  const handleMarkDebtPaid = async (debt: FriendDebt) => {
+    await addTransaction({
+      amount: debt.amount,
+      category: 'Возврат долга',
+      type: debt.status === 'i_owe' ? 'expense' : 'income',
+      date: new Date(),
+      comment: `Долг: ${debt.personName}`,
+      currency,
+    });
+    await saveFriendDebt({ ...debt, isPaid: true });
+  };
+
   const dateKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
   // Общий источник событий для календаря — тот же хук, что использует и календарь на главном
@@ -773,6 +790,15 @@ export function CreditsScreen() {
                 <Text style={{ color: theme.textMuted, fontSize: 12 }}>
                   {d.status === 'i_owe' ? 'Я должен' : 'Мне должны'} · {d.isPaid ? 'Оплачено' : 'Не оплачено'}
                 </Text>
+                {!d.isPaid && (
+                  <View style={{ marginTop: spacing.sm }}>
+                    <AppButton
+                      title={d.status === 'i_owe' ? 'Отметить оплаченным' : 'Отметить получено'}
+                      variant="outline"
+                      onPress={() => handleMarkDebtPaid(d)}
+                    />
+                  </View>
+                )}
               </Card>
             ))
           )}

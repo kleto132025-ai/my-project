@@ -13,6 +13,7 @@ import {
   upsertAchievement,
 } from './repository';
 import { calculateMonthlyPayment } from '../utils/calculations';
+import { ACHIEVEMENT_DEFINITIONS } from '../utils/achievements';
 
 // Флаг сидирования хранится в app_meta, чтобы демо-данные добавлялись один раз —
 // при повторных запусках приложения seedDemoDataIfNeeded() сразу выходит.
@@ -180,16 +181,18 @@ export async function seedDemoDataIfNeeded(): Promise<void> {
     currency: 'RUB',
   });
 
-  // Достижения (шаблон, разблокируются по мере использования)
-  const achievements = [
-    { id: generateId(), title: 'Первая транзакция', description: 'Добавьте первую транзакцию', isUnlocked: true, unlockedDate: daysAgo(10) },
-    { id: generateId(), title: '100 транзакций', description: 'Добавьте 100 транзакций', isUnlocked: false },
-    { id: generateId(), title: 'Сохранил 100 000 ₽', description: 'Накопите 100 000 ₽ в целях', isUnlocked: false },
-    { id: generateId(), title: 'Погасил кредит', description: 'Полностью погасите кредит', isUnlocked: false },
-    { id: generateId(), title: 'Выполнил цель', description: 'Достигните финансовой цели', isUnlocked: false },
-  ];
-  for (const a of achievements) {
-    await upsertAchievement(a);
+  // Достижения (шаблон, разблокируются по мере использования) — единый список определений
+  // в src/utils/achievements.ts, чтобы не расходиться с довнесением новых ачивок у тех, кто
+  // уже проходил сидирование (см. ensureAchievementDefinitions в financeStore.ts).
+  for (const def of ACHIEVEMENT_DEFINITIONS) {
+    const isFirst = def.title === 'Первая транзакция';
+    await upsertAchievement({
+      id: generateId(),
+      title: def.title,
+      description: def.description,
+      isUnlocked: isFirst,
+      ...(isFirst ? { unlockedDate: daysAgo(10) } : {}),
+    });
   }
 
   await setMeta(SEED_FLAG_KEY, 'true');

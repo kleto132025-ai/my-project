@@ -449,11 +449,12 @@ export async function listWishlistItems(): Promise<WishlistItem[]> {
 export async function upsertWishlistItem(w: WishlistItem): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO wishlist_items (id, name, price, priority, status, savedAmount)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO wishlist_items (id, name, price, priority, status, savedAmount, goalId)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET name=excluded.name, price=excluded.price,
-       priority=excluded.priority, status=excluded.status, savedAmount=excluded.savedAmount;`,
-    [w.id, w.name, w.price, w.priority, w.status, w.savedAmount]
+       priority=excluded.priority, status=excluded.status, savedAmount=excluded.savedAmount,
+       goalId=excluded.goalId;`,
+    [w.id, w.name, w.price, w.priority, w.status, w.savedAmount, w.goalId ?? null]
   );
 }
 

@@ -430,6 +430,103 @@ describe('financeStore.checkAndUnlockAchievements', () => {
     await useFinanceStore.getState().checkAndUnlockAchievements();
     expect(useFinanceStore.getState().achievements[0].isUnlocked).toBe(false);
   });
+
+  it('unlocks "Досрочное погашение" once a partial credit repayment exists', async () => {
+    useFinanceStore.setState({
+      creditRepayments: [{ id: 'r1', creditId: 'c1', amount: 1000, date: new Date(), type: 'partial', principalPortion: 1000 }],
+      achievements: [{ id: 'a1', title: 'Досрочное погашение', description: '', isUnlocked: false }],
+    });
+    await useFinanceStore.getState().checkAndUnlockAchievements();
+    expect(useFinanceStore.getState().achievements[0].isUnlocked).toBe(true);
+  });
+
+  it('does not unlock "Досрочное погашение" for a regular (non-early) repayment', async () => {
+    useFinanceStore.setState({
+      creditRepayments: [{ id: 'r1', creditId: 'c1', amount: 1000, date: new Date(), type: 'regular', principalPortion: 800 }],
+      achievements: [{ id: 'a1', title: 'Досрочное погашение', description: '', isUnlocked: false }],
+    });
+    await useFinanceStore.getState().checkAndUnlockAchievements();
+    expect(useFinanceStore.getState().achievements[0].isUnlocked).toBe(false);
+  });
+
+  it('unlocks "Все платежи под контролем" once every active regular payment has a matching transaction', async () => {
+    useFinanceStore.setState({
+      regularPayments: [
+        { id: 'p1', name: 'Коммуналка', amount: 6500, category: 'Жильё', dayOfMonth: 10, isActive: true, type: 'expense' },
+      ],
+      transactions: [
+        { id: 't1', amount: 6500, category: 'Жильё', type: 'expense', date: new Date(), comment: 'Коммуналка', currency: 'RUB' },
+      ],
+      achievements: [{ id: 'a1', title: 'Все платежи под контролем', description: '', isUnlocked: false }],
+    });
+    await useFinanceStore.getState().checkAndUnlockAchievements();
+    expect(useFinanceStore.getState().achievements[0].isUnlocked).toBe(true);
+  });
+
+  it('leaves "Все платежи под контролем" locked when a regular payment has no matching transaction', async () => {
+    useFinanceStore.setState({
+      regularPayments: [
+        { id: 'p1', name: 'Коммуналка', amount: 6500, category: 'Жильё', dayOfMonth: 10, isActive: true, type: 'expense' },
+        { id: 'p2', name: 'Интернет', amount: 700, category: 'Связь', dayOfMonth: 5, isActive: true, type: 'expense' },
+      ],
+      transactions: [
+        { id: 't1', amount: 6500, category: 'Жильё', type: 'expense', date: new Date(), comment: 'Коммуналка', currency: 'RUB' },
+      ],
+      achievements: [{ id: 'a1', title: 'Все платежи под контролем', description: '', isUnlocked: false }],
+    });
+    await useFinanceStore.getState().checkAndUnlockAchievements();
+    expect(useFinanceStore.getState().achievements[0].isUnlocked).toBe(false);
+  });
+
+  it('unlocks "Кэшбэк в дело" once an income transaction with category "Кэшбэк" exists', async () => {
+    useFinanceStore.setState({
+      transactions: [{ id: 't1', amount: 500, category: 'Кэшбэк', type: 'income', date: new Date(), currency: 'RUB' }],
+      achievements: [{ id: 'a1', title: 'Кэшбэк в дело', description: '', isUnlocked: false }],
+    });
+    await useFinanceStore.getState().checkAndUnlockAchievements();
+    expect(useFinanceStore.getState().achievements[0].isUnlocked).toBe(true);
+  });
+
+  it('unlocks "Первая выплата по инвестициям" once an investment payout exists', async () => {
+    useFinanceStore.setState({
+      investmentPayouts: [{ id: 'ip1', investmentId: 'i1', amount: 300, date: new Date() }],
+      achievements: [{ id: 'a1', title: 'Первая выплата по инвестициям', description: '', isUnlocked: false }],
+    });
+    await useFinanceStore.getState().checkAndUnlockAchievements();
+    expect(useFinanceStore.getState().achievements[0].isUnlocked).toBe(true);
+  });
+});
+
+describe('financeStore.loadAll achievement backfill', () => {
+  it('inserts achievement definitions missing from the loaded list, by title', async () => {
+    (repo.listAchievements as jest.Mock).mockResolvedValueOnce([
+      { id: 'a1', title: 'Первая транзакция', description: '', isUnlocked: true, unlockedDate: new Date() },
+    ]);
+    await useFinanceStore.getState().loadAll();
+    const titles = useFinanceStore.getState().achievements.map((a) => a.title);
+    expect(titles).toContain('Досрочное погашение');
+    expect(titles).toContain('Все платежи под контролем');
+    expect(titles).toContain('Кэшбэк в дело');
+    expect(titles).toContain('Первая выплата по инвестициям');
+    expect(repo.upsertAchievement).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Досрочное погашение', isUnlocked: false })
+    );
+  });
+
+  it('does not insert anything when every definition is already present', async () => {
+    const { ACHIEVEMENT_DEFINITIONS } = require('../utils/achievements');
+    (repo.listAchievements as jest.Mock).mockResolvedValueOnce(
+      ACHIEVEMENT_DEFINITIONS.map((def: { title: string; description: string }, i: number) => ({
+        id: `a${i}`,
+        title: def.title,
+        description: def.description,
+        isUnlocked: false,
+      }))
+    );
+    (repo.upsertAchievement as jest.Mock).mockClear();
+    await useFinanceStore.getState().loadAll();
+    expect(repo.upsertAchievement).not.toHaveBeenCalled();
+  });
 });
 
 describe('financeStore.importBackup', () => {

@@ -27,6 +27,7 @@ import { setMeta } from '../database/client';
 import { useSettingsStore } from './settingsStore';
 import { calculateGoalProgress, calculateAmortizationStep, calculateMonthlyInterest, monthsElapsed } from '../utils/calculations';
 import type { BackupData } from '../utils/backup';
+import { ACHIEVEMENT_DEFINITIONS } from '../utils/achievements';
 
 interface FinanceState {
   isLoaded: boolean;
@@ -203,6 +204,23 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       recurringTemplates, profile, isLoaded: true,
     });
     await get().accrueSavingsInterest();
+    // Достижения, добавленные в ACHIEVEMENT_DEFINITIONS уже после того, как пользователь
+    // прошёл разовое сидирование демо-данных, иначе никогда бы у него не появились —
+    // сидирование запускается только один раз за всё время. Довносим недостающие по title.
+    const missingDefs = ACHIEVEMENT_DEFINITIONS.filter(
+      (def) => !get().achievements.some((a) => a.title === def.title)
+    );
+    if (missingDefs.length > 0) {
+      const newAchievements: Achievement[] = missingDefs.map((def) => ({
+        id: generateId(),
+        title: def.title,
+        description: def.description,
+        isUnlocked: false,
+      }));
+      for (const a of newAchievements) await repo.upsertAchievement(a);
+      set((state) => ({ achievements: [...state.achievements, ...newAchievements] }));
+    }
+    await get().checkAndUnlockAchievements();
   },
 
   addTransaction: async (t) => {
@@ -597,6 +615,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         investmentPayouts: [payout, ...state.investmentPayouts],
         transactions: [transaction, ...state.transactions],
       }));
+      await get().checkAndUnlockAchievements();
       return;
     }
 
@@ -743,6 +762,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       cashbackCards: state.cashbackCards.map((c) => (c.id === cardId ? updatedCard : c)),
       transactions: [transaction, ...state.transactions],
     }));
+    await get().checkAndUnlockAchievements();
   },
 
   unlockAchievement: async (id) => {
@@ -881,6 +901,40 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       state.goals.some((g) => calculateGoalProgress(g.savedAmount, g.targetAmount) >= 100)
     ) {
       await get().unlockAchievement(finishedGoal.id);
+    }
+    const earlyRepayment = findByTitle('Досрочное погашение');
+    if (earlyRepayment && !earlyRepayment.isUnlocked && state.creditRepayments.some((r) => r.type === 'partial')) {
+      await get().unlockAchievement(earlyRepayment.id);
+    }
+    // "Все платежи под контролем" — для каждого активного регулярного платежа должна найтись
+    // хотя бы одна транзакция, отмеченная через "Отметить оплаченным"/"Отметить получено"
+    // (совпадение по категории/типу/сумме/названию — то же самое условие, что и проверка на
+    // повторную отметку в том же месяце на самом экране регулярных платежей).
+    const allPaymentsTracked = findByTitle('Все платежи под контролем');
+    const activeRegularPayments = state.regularPayments.filter((p) => p.isActive);
+    if (
+      allPaymentsTracked &&
+      !allPaymentsTracked.isUnlocked &&
+      activeRegularPayments.length > 0 &&
+      activeRegularPayments.every((p) =>
+        state.transactions.some(
+          (t) => t.category === p.category && t.type === p.type && t.amount === p.amount && t.comment === p.name
+        )
+      )
+    ) {
+      await get().unlockAchievement(allPaymentsTracked.id);
+    }
+    const cashbackUsed = findByTitle('Кэшбэк в дело');
+    if (
+      cashbackUsed &&
+      !cashbackUsed.isUnlocked &&
+      state.transactions.some((t) => t.category === 'Кэшбэк' && t.type === 'income')
+    ) {
+      await get().unlockAchievement(cashbackUsed.id);
+    }
+    const firstPayout = findByTitle('Первая выплата по инвестициям');
+    if (firstPayout && !firstPayout.isUnlocked && state.investmentPayouts.length >= 1) {
+      await get().unlockAchievement(firstPayout.id);
     }
   },
 }));

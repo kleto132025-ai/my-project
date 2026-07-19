@@ -28,6 +28,7 @@ export function WishlistScreen() {
   const theme = useTheme();
   const currency = useSettingsStore((s) => s.currency);
   const wishlistItems = useFinanceStore((s) => s.wishlistItems);
+  const goals = useFinanceStore((s) => s.goals);
   const saveWishlistItem = useFinanceStore((s) => s.saveWishlistItem);
   const removeWishlistItem = useFinanceStore((s) => s.removeWishlistItem);
 
@@ -37,11 +38,13 @@ export function WishlistScreen() {
   const [price, setPrice] = useState('');
   const [savedAmount, setSavedAmount] = useState('');
   const [priority, setPriority] = useState<GoalPriority>('medium');
+  const [goalId, setGoalId] = useState('');
 
   const resetForm = () => {
     setName('');
     setPrice('');
     setSavedAmount('');
+    setGoalId('');
     setShowForm(false);
     setEditingId(null);
   };
@@ -51,11 +54,22 @@ export function WishlistScreen() {
     setPrice(String(item.price));
     setSavedAmount(String(item.savedAmount));
     setPriority(item.priority);
+    setGoalId(item.goalId ?? '');
     setEditingId(item.id);
     setShowForm(true);
   };
 
   const isEditing = editingId !== null;
+
+  // Сумма, накопленная на конкретное желание, — своя (savedAmount) или, если желание привязано
+  // к финансовой цели, берётся из самой цели (с учётом суммы партнёра для общих целей), чтобы не
+  // приходилось дублировать одно и то же накопление вручную в двух местах.
+  const effectiveSaved = (item: WishlistItem): number => {
+    if (!item.goalId) return item.savedAmount;
+    const goal = goals.find((g) => g.id === item.goalId);
+    if (!goal) return item.savedAmount;
+    return goal.savedAmount + (goal.isShared ? goal.partnerSavedAmount ?? 0 : 0);
+  };
 
   const handleAdd = async () => {
     if (!name.trim() || !price) return;
@@ -67,6 +81,7 @@ export function WishlistScreen() {
       priority,
       status: existing?.status ?? 'postponed',
       savedAmount: savedAmount ? parseLocaleNumber(savedAmount) : existing?.savedAmount ?? 0,
+      goalId: goalId || undefined,
     } as WishlistItem);
     resetForm();
   };
@@ -95,10 +110,15 @@ export function WishlistScreen() {
                 <CardActions onEdit={() => startEdit(item)} onDelete={() => confirmDelete(item.name, () => removeWishlistItem(item.id))} />
               </View>
             </View>
-            <ProgressBar percent={calculateGoalProgress(item.savedAmount, item.price)} />
+            <ProgressBar percent={calculateGoalProgress(effectiveSaved(item), item.price)} />
             <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
-              Накоплено {formatCurrency(item.savedAmount, currency)} из {formatCurrency(item.price, currency)}
+              Накоплено {formatCurrency(effectiveSaved(item), currency)} из {formatCurrency(item.price, currency)}
             </Text>
+            {item.goalId && (
+              <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                Привязано к цели «{goals.find((g) => g.id === item.goalId)?.name ?? '—'}»
+              </Text>
+            )}
             <Pressable onPress={() => cycleStatus(item.id)}>
               <Text style={{ color: theme.accent, fontWeight: '700', marginTop: 6 }}>
                 {STATUS_LABELS[item.status]} · изменить
@@ -112,7 +132,21 @@ export function WishlistScreen() {
         <Card>
           <FormInput label="Название" value={name} onChangeText={setName} placeholder="Наушники" />
           <FormInput label="Цена" keyboardType="decimal-pad" value={price} onChangeText={setPrice} />
-          <FormInput label="Накоплено" keyboardType="decimal-pad" value={savedAmount} onChangeText={setSavedAmount} placeholder="0" />
+          {goals.length > 0 && (
+            <>
+              <Text style={{ color: theme.textMuted, fontSize: 12, marginBottom: 4 }}>
+                Привязать к финансовой цели (накопленная сумма будет браться из неё)
+              </Text>
+              <SegmentedControl
+                value={goalId}
+                onChange={setGoalId}
+                options={[{ label: 'Не привязано', value: '' }, ...goals.map((g) => ({ label: g.name, value: g.id }))]}
+              />
+            </>
+          )}
+          {!goalId && (
+            <FormInput label="Накоплено" keyboardType="decimal-pad" value={savedAmount} onChangeText={setSavedAmount} placeholder="0" />
+          )}
           <SegmentedControl
             value={priority}
             onChange={setPriority}
