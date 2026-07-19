@@ -390,34 +390,50 @@ export function SavingsScreen() {
           {goals.length === 0 ? (
             <EmptyState title="Пока нет целей" subtitle="Создайте первую финансовую цель" />
           ) : (
-            goals.map((g) => (
-              <Card key={g.id}>
-                <View style={styles.rowBetween}>
-                  <Text style={[styles.itemTitle, { color: theme.text }]}>{g.name}</Text>
-                  <View style={styles.headerRight}>
-                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                      до {g.deadline.toLocaleDateString('ru-RU')}
-                    </Text>
-                    <CardActions onEdit={() => startEditGoal(g)} onDelete={() => confirmDelete(g.name, () => removeGoal(g.id))} />
+            goals.map((g) => {
+              // Для совместной цели остаток считается от суммы обоих вкладов — цель одна на
+              // двоих (например, путёвка), и важно видеть, сколько ещё не хватает до полной
+              // стоимости, а не до вклада одного человека.
+              const totalSaved = g.savedAmount + (g.isShared ? g.partnerSavedAmount ?? 0 : 0);
+              const remaining = Math.max(g.targetAmount - totalSaved, 0);
+              return (
+                <Card key={g.id}>
+                  <View style={styles.rowBetween}>
+                    <Text style={[styles.itemTitle, { color: theme.text }]}>{g.name}</Text>
+                    <View style={styles.headerRight}>
+                      <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                        до {g.deadline.toLocaleDateString('ru-RU')}
+                      </Text>
+                      <CardActions onEdit={() => startEditGoal(g)} onDelete={() => confirmDelete(g.name, () => removeGoal(g.id))} />
+                    </View>
                   </View>
-                </View>
-                <ProgressBar percent={calculateGoalProgress(g.savedAmount, g.targetAmount)} />
-                <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
-                  {formatCurrency(g.savedAmount, currency)} из {formatCurrency(g.targetAmount, currency)}
-                </Text>
-                {g.isShared && (
-                  <View style={{ marginTop: spacing.sm }}>
-                    <Text style={{ color: theme.textMuted, fontSize: 12 }}>
-                      Совместная цель с {g.partnerName}
+                  <ProgressBar percent={calculateGoalProgress(g.savedAmount, g.targetAmount)} />
+                  <Text style={{ color: theme.textMuted, marginTop: 6, fontSize: 13 }}>
+                    {formatCurrency(g.savedAmount, currency)} из {formatCurrency(g.targetAmount, currency)}
+                  </Text>
+                  {remaining > 0 ? (
+                    <Text style={{ color: theme.text, marginTop: 2, fontSize: 13, fontWeight: '700' }}>
+                      Осталось накопить: {formatCurrency(remaining, currency)}
                     </Text>
-                    <ProgressBar
-                      percent={calculateGoalProgress(g.partnerSavedAmount ?? 0, g.targetAmount)}
-                      color={theme.secondary}
-                    />
-                  </View>
-                )}
-              </Card>
-            ))
+                  ) : (
+                    <Text style={{ color: theme.success, marginTop: 2, fontSize: 13, fontWeight: '700' }}>
+                      Цель достигнута!
+                    </Text>
+                  )}
+                  {g.isShared && (
+                    <View style={{ marginTop: spacing.sm }}>
+                      <Text style={{ color: theme.textMuted, fontSize: 12 }}>
+                        Совместная цель с {g.partnerName}
+                      </Text>
+                      <ProgressBar
+                        percent={calculateGoalProgress(g.partnerSavedAmount ?? 0, g.targetAmount)}
+                        color={theme.secondary}
+                      />
+                    </View>
+                  )}
+                </Card>
+              );
+            })
           )}
           {showForm ? (
             <Card>
