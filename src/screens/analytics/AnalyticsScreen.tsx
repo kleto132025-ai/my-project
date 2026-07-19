@@ -14,6 +14,7 @@ import { formatCurrency, formatPercent } from '../../utils/format';
 import { calculateForecast } from '../../utils/calculations';
 import { normalizeTransactionsToCurrency } from '../../utils/currency';
 import { generateAndSharePdfReport } from '../../utils/report';
+import { TRANSFER_CATEGORIES } from '../../theme/categoryIcons';
 import type { Transaction } from '../../types';
 
 type Period = 'month' | 'quarter' | 'year';
@@ -69,12 +70,20 @@ export function AnalyticsScreen() {
     return transactions.filter((t) => inRange(t.date, start, end));
   }, [transactions, period]);
 
+  // Переводы между своими счетами (накопительный ⇄ текущий) исключены — это не реальные
+  // траты/доходы, а просто перекладывание денег, которое иначе искажало бы картину расходов.
   const expensesByCategory = useMemo(
-    () => groupByCategory(currentPeriodTx.filter((t) => t.type === 'expense')),
+    () =>
+      groupByCategory(
+        currentPeriodTx.filter((t) => t.type === 'expense' && !TRANSFER_CATEGORIES.includes(t.category))
+      ),
     [currentPeriodTx]
   );
   const incomesByCategory = useMemo(
-    () => groupByCategory(currentPeriodTx.filter((t) => t.type === 'income')),
+    () =>
+      groupByCategory(
+        currentPeriodTx.filter((t) => t.type === 'income' && !TRANSFER_CATEGORIES.includes(t.category))
+      ),
     [currentPeriodTx]
   );
 
@@ -117,7 +126,10 @@ export function AnalyticsScreen() {
 
   const yearForecast = calculateForecast(transactions, 12);
   const allCategories = useMemo(
-    () => groupByCategory(currentPeriodTx).sort((a, b) => b.total - a.total),
+    () =>
+      groupByCategory(currentPeriodTx.filter((t) => !TRANSFER_CATEGORIES.includes(t.category))).sort(
+        (a, b) => b.total - a.total
+      ),
     [currentPeriodTx]
   );
   const totalAll = allCategories.reduce((s, c) => s + c.total, 0);

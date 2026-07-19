@@ -11,6 +11,8 @@ import {
   calculateMortgageProfit,
   simulateAmortization,
   nextMonthlyOccurrence,
+  nextRegularPaymentOccurrence,
+  buildSavingsPlan,
 } from '../utils/calculations';
 import type { Transaction } from '../types';
 
@@ -242,5 +244,122 @@ describe('nextMonthlyOccurrence', () => {
     const result = nextMonthlyOccurrence(20, from);
     expect(result.getMonth()).toBe(5);
     expect(result.getDate()).toBe(20);
+  });
+});
+
+describe('nextRegularPaymentOccurrence', () => {
+  it('falls back to nextMonthlyOccurrence when there is no window', () => {
+    const from = new Date('2026-06-25');
+    const result = nextRegularPaymentOccurrence(20, undefined, from);
+    expect(result.getMonth()).toBe(6);
+    expect(result.getDate()).toBe(20);
+  });
+
+  it('returns today when today falls inside an already-open payment window (e.g. ЖКХ 1-10)', () => {
+    // Regression: nextMonthlyOccurrence(1, ...) would roll this to next month even though
+    // the window (1-10) is still open today, making it vanish from "На этой неделе".
+    const from = new Date('2026-06-05');
+    const result = nextRegularPaymentOccurrence(1, 10, from);
+    expect(result.getFullYear()).toBe(2026);
+    expect(result.getMonth()).toBe(5);
+    expect(result.getDate()).toBe(5);
+  });
+
+  it('returns the window start when the window has not opened yet this month', () => {
+    const from = new Date('2026-06-05');
+    const result = nextRegularPaymentOccurrence(10, 20, from);
+    expect(result.getDate()).toBe(10);
+  });
+
+  it('rolls over to next month once the window has fully closed', () => {
+    const from = new Date('2026-06-15');
+    const result = nextRegularPaymentOccurrence(1, 10, from);
+    expect(result.getMonth()).toBe(6);
+    expect(result.getDate()).toBe(1);
+  });
+
+  it('treats the last day of the window as still open (inclusive)', () => {
+    const from = new Date('2026-06-10');
+    const result = nextRegularPaymentOccurrence(1, 10, from);
+    expect(result.getMonth()).toBe(5);
+    expect(result.getDate()).toBe(10);
+  });
+});
+
+describe('buildSavingsPlan', () => {
+  const discretionary = ['Развлечения', 'Рестораны'];
+  const transfers = ['Перевод на счёт', 'Перевод со счёта'];
+
+  it('computes average monthly income/expense and the 10-30% target range', () => {
+    const transactions = [
+      makeTransaction({ type: 'income', category: 'Зарплата', amount: 100000, date: new Date('2026-06-05') }),
+      makeTransaction({ type: 'expense', category: 'Продукты', amount: 30000, date: new Date('2026-06-10') }),
+      makeTransaction({ type: 'expense', category: 'Рестораны', amount: 10000, date: new Date('2026-06-15') }),
+    ];
+    const plan = buildSavingsPlan(transactions, discretionary, transfers);
+
+    expect(plan.avgMonthlyIncome).toBe(100000);
+    expect(plan.avgMonthlyExpense).toBe(40000);
+    expect(plan.currentMonthlySavings).toBe(60000);
+    expect(plan.currentSavingsRate).toBe(60);
+    expect(plan.targetLow).toBe(10000);
+    expect(plan.targetHigh).toBe(30000);
+    expect(plan.shortfallToTargetLow).toBe(0);
+  });
+
+  it('excludes transfer categories from income/expense so they do not distort the savings rate', () => {
+    const transactions = [
+      makeTransaction({ type: 'income', category: 'Зарплата', amount: 100000, date: new Date('2026-06-05') }),
+      makeTransaction({ type: 'expense', category: 'Перевод на счёт', amount: 50000, date: new Date('2026-06-06') }),
+      makeTransaction({ type: 'expense', category: 'Продукты', amount: 20000, date: new Date('2026-06-10') }),
+    ];
+    const plan = buildSavingsPlan(transactions, discretionary, transfers);
+
+    expect(plan.avgMonthlyIncome).toBe(100000);
+    expect(plan.avgMonthlyExpense).toBe(20000);
+  });
+
+  it('lists discretionary categories sorted by monthly average, excluding non-discretionary ones', () => {
+    const transactions = [
+      makeTransaction({ type: 'income', category: 'Зарплата', amount: 100000, date: new Date('2026-06-05') }),
+      makeTransaction({ type: 'expense', category: 'Продукты', amount: 20000, date: new Date('2026-06-10') }),
+      makeTransaction({ type: 'expense', category: 'Рестораны', amount: 8000, date: new Date('2026-06-12') }),
+      makeTransaction({ type: 'expense', category: 'Развлечения', amount: 12000, date: new Date('2026-06-14') }),
+    ];
+    const plan = buildSavingsPlan(transactions, discretionary, transfers);
+
+    expect(plan.discretionary).toEqual([
+      { category: 'Развлечения', monthlyAvg: 12000 },
+      { category: 'Рестораны', monthlyAvg: 8000 },
+    ]);
+    expect(plan.discretionaryMonthlyTotal).toBe(20000);
+  });
+
+  it('reports a shortfall to the 10% target when currently saving less', () => {
+    const transactions = [
+      makeTransaction({ type: 'income', category: 'Зарплата', amount: 100000, date: new Date('2026-06-05') }),
+      makeTransaction({ type: 'expense', category: 'Продукты', amount: 98000, date: new Date('2026-06-10') }),
+    ];
+    const plan = buildSavingsPlan(transactions, discretionary, transfers);
+
+    // saving 2000/mo, target low is 10000 -> shortfall 8000
+    expect(plan.currentMonthlySavings).toBe(2000);
+    expect(plan.shortfallToTargetLow).toBe(8000);
+  });
+
+  it('averages over the number of distinct months with any activity', () => {
+    const transactions = [
+      makeTransaction({ type: 'income', category: 'Зарплата', amount: 100000, date: new Date('2026-05-05') }),
+      makeTransaction({ type: 'income', category: 'Зарплата', amount: 100000, date: new Date('2026-06-05') }),
+    ];
+    const plan = buildSavingsPlan(transactions, discretionary, transfers);
+    expect(plan.avgMonthlyIncome).toBe(100000);
+  });
+
+  it('handles zero income without dividing by zero', () => {
+    const plan = buildSavingsPlan([], discretionary, transfers);
+    expect(plan.currentSavingsRate).toBe(0);
+    expect(plan.targetLow).toBe(0);
+    expect(plan.targetHigh).toBe(0);
   });
 });

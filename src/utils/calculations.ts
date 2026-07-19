@@ -32,6 +32,73 @@ export function calculateForecast(transactions: Transaction[], months: number): 
   return currentBalance + avgMonthlyNet * months;
 }
 
+export interface DiscretionaryCategorySpend {
+  category: string;
+  monthlyAvg: number;
+}
+
+export interface SavingsPlan {
+  avgMonthlyIncome: number;
+  /** Реальные расходы — без учёта переводов между своими же счетами (не настоящая трата). */
+  avgMonthlyExpense: number;
+  currentMonthlySavings: number;
+  /** В процентах от среднего дохода; может быть отрицательным, если расходы превышают доход. */
+  currentSavingsRate: number;
+  targetLow: number;
+  targetHigh: number;
+  /** Насколько не хватает до нижней границы рекомендованных 10% — 0, если уже достигнуто. */
+  shortfallToTargetLow: number;
+  discretionary: DiscretionaryCategorySpend[];
+  discretionaryMonthlyTotal: number;
+}
+
+// Строит практический план накоплений: сколько в среднем приходит и уходит денег в месяц,
+// сколько стоит откладывать (общепринятый ориентир — 10-30% дохода) и на каких необязательных
+// категориях расходов реальнее всего сэкономить, чтобы выйти на этот процент. transferCategories
+// исключаются из расчёта дохода/расходов — это просто перекладывание денег между своими же
+// счетами, а не настоящий заработок или трата.
+export function buildSavingsPlan(
+  transactions: Transaction[],
+  discretionaryCategories: string[],
+  transferCategories: string[]
+): SavingsPlan {
+  const real = transactions.filter((t) => !transferCategories.includes(t.category));
+
+  const monthsSpan = new Set<string>();
+  for (const t of real) monthsSpan.add(`${t.date.getFullYear()}-${t.date.getMonth()}`);
+  const distinctMonths = Math.max(monthsSpan.size, 1);
+
+  const totalIncome = real.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const totalExpense = real.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const avgMonthlyIncome = totalIncome / distinctMonths;
+  const avgMonthlyExpense = totalExpense / distinctMonths;
+  const currentMonthlySavings = avgMonthlyIncome - avgMonthlyExpense;
+
+  const discretionaryTotals = new Map<string, number>();
+  real
+    .filter((t) => t.type === 'expense' && discretionaryCategories.includes(t.category))
+    .forEach((t) => discretionaryTotals.set(t.category, (discretionaryTotals.get(t.category) ?? 0) + t.amount));
+
+  const discretionary = Array.from(discretionaryTotals.entries())
+    .map(([category, total]) => ({ category, monthlyAvg: total / distinctMonths }))
+    .sort((a, b) => b.monthlyAvg - a.monthlyAvg);
+
+  const targetLow = avgMonthlyIncome * 0.1;
+  const targetHigh = avgMonthlyIncome * 0.3;
+
+  return {
+    avgMonthlyIncome,
+    avgMonthlyExpense,
+    currentMonthlySavings,
+    currentSavingsRate: avgMonthlyIncome > 0 ? (currentMonthlySavings / avgMonthlyIncome) * 100 : 0,
+    targetLow,
+    targetHigh,
+    shortfallToTargetLow: Math.max(targetLow - currentMonthlySavings, 0),
+    discretionary,
+    discretionaryMonthlyTotal: discretionary.reduce((s, c) => s + c.monthlyAvg, 0),
+  };
+}
+
 // termMonths — необязательный параметр сверх сигнатуры из ТЗ (amount, rate, paidMonths).
 // Без общего срока кредита формула аннуитета математически вырождается в исходную сумму
 // (числитель и знаменатель сокращаются), поэтому термин нужен по умолчанию.
@@ -150,6 +217,25 @@ export function nextMonthlyOccurrence(dayOfMonth: number, from: Date): Date {
     candidate.setMonth(candidate.getMonth() + 1);
   }
   return candidate;
+}
+
+// Как nextMonthlyOccurrence, но для регулярных платежей с окном оплаты (dayOfMonthEnd задан,
+// например ЖКХ — с 1 по 10 число): nextMonthlyOccurrence одного dayOfMonth ошибочно "перепрыгивал"
+// на следующий месяц, если сегодня уже позже dayOfMonth, даже если окно оплаты (до dayOfMonthEnd)
+// ещё не закрылось — платёж, который прямо сейчас можно оплатить, пропадал из виджетов вроде
+// "На этой неделе". Если сегодня внутри окна — возвращает сегодня (платёж уже актуален); если
+// окно ещё не началось в этом месяце — дату начала; если уже закрылось — начало окна в следующем.
+export function nextRegularPaymentOccurrence(dayOfMonth: number, dayOfMonthEnd: number | undefined, from: Date): Date {
+  if (!dayOfMonthEnd) return nextMonthlyOccurrence(dayOfMonth, from);
+
+  const today = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const windowStart = new Date(from.getFullYear(), from.getMonth(), dayOfMonth);
+  const windowEnd = new Date(from.getFullYear(), from.getMonth(), dayOfMonthEnd);
+
+  if (today.getTime() > windowEnd.getTime()) {
+    return new Date(from.getFullYear(), from.getMonth() + 1, dayOfMonth);
+  }
+  return today.getTime() >= windowStart.getTime() ? today : windowStart;
 }
 
 export interface AmortizationSimulation {

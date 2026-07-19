@@ -1,4 +1,4 @@
-import { buildFinancialSummaryPrompt } from '../utils/aiInsights';
+import { buildFinancialSummaryPrompt, generateInsights } from '../utils/aiInsights';
 
 describe('buildFinancialSummaryPrompt', () => {
   it('includes income, expense and savings rate', () => {
@@ -47,5 +47,62 @@ describe('buildFinancialSummaryPrompt', () => {
     });
     expect(prompt).toContain('3–4 конкретных');
     expect(prompt).toContain('без markdown-разметки');
+  });
+
+  it('lists goal progress with the remaining amount and percent when goals are provided', () => {
+    const prompt = buildFinancialSummaryPrompt({
+      totalIncome: 100000,
+      totalExpense: 70000,
+      currency: 'RUB',
+      topExpenseCategories: [],
+      budgetLimits: [],
+      goals: [{ name: 'Путешествие', targetAmount: 100000, savedAmount: 30000 }],
+    });
+    expect(prompt).toContain('Путешествие: накоплено 30000 из 100000 RUB (осталось 70%)');
+  });
+
+  it('sums both contributors for a shared goal', () => {
+    const prompt = buildFinancialSummaryPrompt({
+      totalIncome: 100000,
+      totalExpense: 70000,
+      currency: 'RUB',
+      topExpenseCategories: [],
+      budgetLimits: [],
+      goals: [
+        { name: 'Квартира', targetAmount: 100000, savedAmount: 20000, isShared: true, partnerSavedAmount: 30000 },
+      ],
+    });
+    expect(prompt).toContain('Квартира: накоплено 50000 из 100000 RUB (осталось 50%)');
+  });
+});
+
+describe('generateInsights', () => {
+  it('reports how much is left to save toward a goal, in percent and amount', () => {
+    const insights = generateInsights(
+      [],
+      [{ name: 'Путешествие', targetAmount: 100000, savedAmount: 30000 }],
+      'RUB'
+    );
+    const goalInsight = insights.find((i) => i.title === 'Цель «Путешествие»');
+    expect(goalInsight?.message).toBe('Осталось накопить 70000 RUB — это 70% от цели.');
+  });
+
+  it('combines both contributors for a shared goal', () => {
+    const insights = generateInsights(
+      [],
+      [{ name: 'Квартира', targetAmount: 100000, savedAmount: 20000, isShared: true, partnerSavedAmount: 30000 }],
+      'RUB'
+    );
+    const goalInsight = insights.find((i) => i.title === 'Цель «Квартира»');
+    expect(goalInsight?.message).toBe('Осталось накопить 50000 RUB — это 50% от цели.');
+  });
+
+  it('does not mention a goal that has already been reached', () => {
+    const insights = generateInsights(
+      [],
+      [{ name: 'Путешествие', targetAmount: 100000, savedAmount: 100000 }],
+      'RUB'
+    );
+    expect(insights.find((i) => i.title === 'Цель «Путешествие»')).toBeUndefined();
   });
 });

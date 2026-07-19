@@ -7,9 +7,11 @@ import {
   calculateMortgageProfit,
   simulateAmortization,
   nextMonthlyOccurrence,
+  nextRegularPaymentOccurrence,
 } from '../utils/calculations';
 import { normalizeTransactionsToCurrency, convertAmount } from '../utils/currency';
 import { withComputedSpent } from '../utils/budget';
+import { TRANSFER_CATEGORIES } from '../theme/categoryIcons';
 import type { BudgetLimit, Transaction, Currency } from '../types';
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -65,7 +67,7 @@ export interface CategoryTotal {
 export function useTopCategories(type: 'income' | 'expense', count = 3): CategoryTotal[] {
   const transactions = useNormalizedTransactions();
   return useMemo(() => {
-    const filtered = transactions.filter((t) => t.type === type);
+    const filtered = transactions.filter((t) => t.type === type && !TRANSFER_CATEGORIES.includes(t.category));
     const totalsByCategory = new Map<string, number>();
     for (const t of filtered) {
       totalsByCategory.set(t.category, (totalsByCategory.get(t.category) ?? 0) + t.amount);
@@ -307,9 +309,10 @@ export function useUpcomingPayments(days = 7): UpcomingPayment[] {
     regularPayments
       .filter((p) => p.isActive)
       .forEach((p) => {
-        const date = nextMonthlyOccurrence(p.dayOfMonth, startOfToday);
+        const date = nextRegularPaymentOccurrence(p.dayOfMonth, p.dayOfMonthEnd, startOfToday);
         if (inRange(date)) {
-          events.push({ id: `regular-${p.id}`, date, label: p.name, amount: p.amount });
+          const label = p.dayOfMonthEnd ? `${p.name} (можно оплатить до ${p.dayOfMonthEnd} числа)` : p.name;
+          events.push({ id: `regular-${p.id}`, date, label, amount: p.amount });
         }
       });
 

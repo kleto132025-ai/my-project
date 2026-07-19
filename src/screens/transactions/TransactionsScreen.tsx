@@ -1,8 +1,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { SegmentedControl } from '../../components/SegmentedControl';
+import { Dropdown } from '../../components/Dropdown';
 import { SwipeableTransactionRow } from '../../components/SwipeableTransactionRow';
 import { EmptyState } from '../../components/EmptyState';
 import { FloatingAddButton } from '../../components/FloatingAddButton';
@@ -122,28 +123,12 @@ export function TransactionsScreen() {
         ]}
       />
 
-      <View style={styles.chipsRow}>
-        {categories.map((c) => {
-          const active = selectedCategory === c;
-          return (
-            <Pressable
-              key={c}
-              onPress={() => setSelectedCategory(active ? null : c)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor: active ? accentColor : theme.isDark ? '#1E293B' : '#EEF2F7',
-                  borderColor: active ? accentColor : theme.border,
-                },
-              ]}
-            >
-              <Text style={{ color: active ? '#FFFFFF' : theme.text, fontSize: 12, fontWeight: '600' }}>
-                {c}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <Dropdown
+        placeholder="Все категории"
+        value={selectedCategory}
+        onChange={setSelectedCategory}
+        options={[{ label: 'Все категории', value: null }, ...categories.map((c) => ({ label: c, value: c }))]}
+      />
     </View>
   );
 
@@ -186,8 +171,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: spacing.md,
   },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.md },
-  chip: { paddingHorizontal: spacing.sm + 2, paddingVertical: 6, borderRadius: radius.full, borderWidth: 1 },
   listCard: {
     flex: 1,
     borderRadius: radius.lg,

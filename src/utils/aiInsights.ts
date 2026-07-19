@@ -14,7 +14,19 @@ const CATEGORY_BENCHMARKS: Record<string, number> = {
   'Жильё': 30,
 };
 
-export function generateInsights(transactions: Transaction[]): Insight[] {
+export interface GoalProgressInput {
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  isShared?: boolean;
+  partnerSavedAmount?: number;
+}
+
+export function generateInsights(
+  transactions: Transaction[],
+  goals: GoalProgressInput[] = [],
+  currency = ''
+): Insight[] {
   const insights: Insight[] = [];
   const totalIncome = transactions.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = transactions.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -51,6 +63,20 @@ export function generateInsights(transactions: Transaction[]): Insight[] {
     }
   }
 
+  // Для совместной цели остаток считается от суммы вкладов обоих участников — та же логика,
+  // что и на карточке цели в "Накоплениях" (src/screens/savings/SavingsScreen.tsx), чтобы
+  // цифры в двух местах не разошлись.
+  for (const goal of goals) {
+    const totalSaved = goal.savedAmount + (goal.isShared ? goal.partnerSavedAmount ?? 0 : 0);
+    const remaining = Math.max(goal.targetAmount - totalSaved, 0);
+    if (remaining <= 0 || goal.targetAmount <= 0) continue;
+    const remainingPercent = Math.round((remaining / goal.targetAmount) * 100);
+    insights.push({
+      title: `Цель «${goal.name}»`,
+      message: `Осталось накопить ${Math.round(remaining)} ${currency} — это ${remainingPercent}% от цели.`,
+    });
+  }
+
   if (insights.length === 0) {
     insights.push({
       title: 'Всё сбалансировано',
@@ -67,6 +93,7 @@ export interface FinancialSummaryInput {
   currency: string;
   topExpenseCategories: { category: string; total: number; percent: number }[];
   budgetLimits: { category: string; limit: number; spent: number }[];
+  goals?: GoalProgressInput[];
 }
 
 // Собирает компактную текстовую сводку (не сырые транзакции — только агрегированные цифры,
@@ -74,7 +101,7 @@ export interface FinancialSummaryInput {
 // промпт для реального ИИ. Вынесено в чистую функцию отдельно от сетевого вызова, чтобы
 // промпт можно было проверить тестом без обращения к API.
 export function buildFinancialSummaryPrompt(input: FinancialSummaryInput): string {
-  const { totalIncome, totalExpense, currency, topExpenseCategories, budgetLimits } = input;
+  const { totalIncome, totalExpense, currency, topExpenseCategories, budgetLimits, goals = [] } = input;
   const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : null;
 
   const lines: string[] = [
@@ -97,6 +124,16 @@ export function buildFinancialSummaryPrompt(input: FinancialSummaryInput): strin
     lines.push('', 'Лимиты бюджета по категориям:');
     for (const l of budgetLimits) {
       lines.push(`- ${l.category}: потрачено ${l.spent} из ${l.limit} ${currency}`);
+    }
+  }
+
+  if (goals.length > 0) {
+    lines.push('', 'Финансовые цели:');
+    for (const g of goals) {
+      const totalSaved = g.savedAmount + (g.isShared ? g.partnerSavedAmount ?? 0 : 0);
+      const remaining = Math.max(g.targetAmount - totalSaved, 0);
+      const remainingPercent = g.targetAmount > 0 ? Math.round((remaining / g.targetAmount) * 100) : 0;
+      lines.push(`- ${g.name}: накоплено ${totalSaved} из ${g.targetAmount} ${currency} (осталось ${remainingPercent}%)`);
     }
   }
 

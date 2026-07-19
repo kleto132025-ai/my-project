@@ -26,8 +26,9 @@ export function AiInsightsScreen() {
   const setLastInsight = useAiStore((s) => s.setLastInsight);
   const topExpenseCategories = useTopCategories('expense', 5);
   const budgetLimits = useBudgetLimitsWithSpent();
+  const goals = useFinanceStore((s) => s.goals);
 
-  const insights = useMemo(() => generateInsights(transactions), [transactions]);
+  const insights = useMemo(() => generateInsights(transactions, goals, currency), [transactions, goals, currency]);
 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -44,8 +45,15 @@ export function AiInsightsScreen() {
       currency,
       topExpenseCategories,
       budgetLimits: budgetLimits.map((l) => ({ category: l.category, limit: l.limit, spent: l.spent })),
+      goals: goals.map((g) => ({
+        name: g.name,
+        targetAmount: g.targetAmount,
+        savedAmount: g.savedAmount,
+        isShared: g.isShared,
+        partnerSavedAmount: g.partnerSavedAmount,
+      })),
     });
-  }, [transactions, currency, topExpenseCategories, budgetLimits]);
+  }, [transactions, currency, topExpenseCategories, budgetLimits, goals]);
 
   const runAiAnalysis = async (prompt: string) => {
     setAiLoading(true);

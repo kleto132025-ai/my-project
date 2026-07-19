@@ -1,6 +1,6 @@
 import type { BudgetLimit, BudgetPeriod, Transaction } from '../types';
 
-const GENERAL_LIMIT_CATEGORY = 'Общий лимит';
+export const GENERAL_LIMIT_CATEGORY = 'Общий лимит';
 
 // Лимиты создавались с полем spent, но реальные расходы туда никогда не дописываются —
 // после сохранения новой транзакции соответствующий лимит не обновлялся, и прогресс-бар

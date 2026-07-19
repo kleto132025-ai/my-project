@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Switch, Alert } from 'react-native';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { Card } from '../../components/Card';
 import { CardActions } from '../../components/CardActions';
@@ -17,6 +17,7 @@ import { vibrateWarning } from '../../utils/haptics';
 import { confirmDelete } from '../../utils/confirm';
 import { useBudgetLimitsWithSpent } from '../../hooks/useFinancials';
 import { DEFAULT_EXPENSE_CATEGORIES } from '../../theme/categoryIcons';
+import { GENERAL_LIMIT_CATEGORY } from '../../utils/budget';
 import type { BudgetLimit, BudgetPeriod } from '../../types';
 import { parseLocaleNumber } from '../../utils/parseNumber';
 
@@ -39,12 +40,14 @@ export function BudgetScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [category, setCategory] = useState('');
   const [limitAmount, setLimitAmount] = useState('');
+  const [isGeneralLimit, setIsGeneralLimit] = useState(false);
   const [period] = useState<BudgetPeriod>('month');
 
   // "spent" в хранилище — это снимок на момент создания лимита (или демо-данные) и никогда
   // не обновляется при добавлении новых транзакций. useBudgetLimitsWithSpent пересчитывает
   // его из реальных трат за текущий календарный период, чтобы прогресс-бары не "замерзали".
   const budgetLimits = useBudgetLimitsWithSpent();
+  const existingGeneralLimit = budgetLimits.find((l) => l.category === GENERAL_LIMIT_CATEGORY);
 
   useEffect(() => {
     budgetLimits.forEach(async (limit) => {
@@ -82,22 +85,36 @@ export function BudgetScreen() {
   const resetForm = () => {
     setCategory('');
     setLimitAmount('');
+    setIsGeneralLimit(false);
     setShowForm(false);
     setEditingId(null);
   };
 
   const startEditLimit = (limit: BudgetLimit) => {
-    setCategory(limit.category);
+    const isGeneral = limit.category === GENERAL_LIMIT_CATEGORY;
+    setCategory(isGeneral ? '' : limit.category);
+    setIsGeneralLimit(isGeneral);
     setLimitAmount(String(limit.limit));
     setEditingId(limit.id);
     setShowForm(true);
   };
 
+  // "Общий лимит" — особая категория, задаваемая один раз в мастере первого запуска; раньше
+  // отредактировать или создать его заново из раздела "Бюджет" было нельзя (CategoryPicker
+  // предлагает только конкретные категории расходов, без пункта "Общий"), поэтому этот лимит
+  // фактически было невозможно поставить, если пропустить или изменить его на онбординге.
+  // Переключатель ниже задаёт категорию явно, а не через CategoryPicker, и сам находит уже
+  // существующую запись "Общий лимит" при сохранении — чтобы не плодить две одинаковые.
   const handleAddLimit = async () => {
-    if (!category.trim() || !limitAmount) return;
+    const targetCategory = isGeneralLimit ? GENERAL_LIMIT_CATEGORY : category.trim();
+    if (!targetCategory || !limitAmount) {
+      Alert.alert('Проверьте данные', isGeneralLimit ? 'Укажите сумму лимита' : 'Укажите категорию и сумму лимита');
+      return;
+    }
+    const targetId = editingId ?? (isGeneralLimit ? existingGeneralLimit?.id : undefined);
     await saveBudgetLimit({
-      ...(editingId ? { id: editingId } : {}),
-      category: category.trim(),
+      ...(targetId ? { id: targetId } : {}),
+      category: targetCategory,
       limit: parseLocaleNumber(limitAmount),
       spent: 0,
       period,
@@ -146,7 +163,27 @@ export function BudgetScreen() {
 
       {showForm ? (
         <Card>
-          <CategoryPicker categories={DEFAULT_EXPENSE_CATEGORIES} selected={category} onSelect={setCategory} />
+          <View style={styles.rowBetween}>
+            <Text style={{ color: theme.text, flexShrink: 1 }}>Общий лимит на все расходы (а не по категории)</Text>
+            <Switch
+              value={isGeneralLimit}
+              onValueChange={(value) => {
+                setIsGeneralLimit(value);
+                if (value && !editingId && existingGeneralLimit) {
+                  // Общий лимит может быть только один — открываем уже существующий на
+                  // редактирование, а не создаём вторую, конфликтующую запись.
+                  setEditingId(existingGeneralLimit.id);
+                  setLimitAmount(String(existingGeneralLimit.limit));
+                } else if (!value && editingId === existingGeneralLimit?.id) {
+                  setEditingId(null);
+                  setLimitAmount('');
+                }
+              }}
+            />
+          </View>
+          {!isGeneralLimit && (
+            <CategoryPicker categories={DEFAULT_EXPENSE_CATEGORIES} selected={category} onSelect={setCategory} />
+          )}
           <FormInput label="Лимит" keyboardType="decimal-pad" value={limitAmount} onChangeText={setLimitAmount} />
           <AppButton title={isEditing ? 'Сохранить изменения' : 'Сохранить лимит'} onPress={handleAddLimit} />
           <View style={{ height: spacing.sm }} />

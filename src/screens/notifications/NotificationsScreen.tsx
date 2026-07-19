@@ -22,6 +22,12 @@ const ICONS: Record<NotificationType, React.ComponentProps<typeof Ionicons>['nam
   debt: 'people-outline',
 };
 
+// Часть экранов вложена во вкладки ("Tabs" на уровне бокового меню), часть — прямые пункты
+// самого бокового меню. relatedScreen может ссылаться на любой из них, поэтому переход должен
+// знать, в какую сторону идти — иначе получим ту же "not handled by any navigator", что уже
+// была с переходом на "Budget" (единственную вкладку среди relatedScreen на момент фикса).
+const TAB_SCREENS = new Set(['Dashboard', 'Transactions', 'Analytics', 'Budget']);
+
 export function NotificationsScreen() {
   const theme = useTheme();
   const notifications = useFinanceStore((s) => s.notifications);
@@ -32,12 +38,14 @@ export function NotificationsScreen() {
   const handlePress = (n: AppNotification) => {
     markNotificationRead(n.id);
     if (n.relatedScreen) {
-      // relatedScreen хранит имя нижней вкладки (например, "Budget"), которая вложена в
-      // "Tabs" на уровне бокового меню — обычный navigation.navigate(name) отсюда её не
-      // находит, так как "Уведомления" — отдельная соседняя ветка меню. Переход через
-      // глобальный navigationRef с вложенными параметрами долетает до нужной вкладки
-      // независимо от того, откуда открыт экран уведомлений.
-      navigateGlobal('Tabs', { screen: n.relatedScreen });
+      // Обычный navigation.navigate(name) отсюда ничего не находит, так как "Уведомления" —
+      // отдельная соседняя ветка бокового меню: переход всегда идёт через глобальный
+      // navigationRef, с вложенными параметрами для экранов внутри вкладок.
+      if (TAB_SCREENS.has(n.relatedScreen)) {
+        navigateGlobal('Tabs', { screen: n.relatedScreen });
+      } else {
+        navigateGlobal(n.relatedScreen);
+      }
     }
   };
 

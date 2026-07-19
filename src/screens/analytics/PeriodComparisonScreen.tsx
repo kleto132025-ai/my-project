@@ -11,6 +11,7 @@ import { useFinanceStore } from '../../store/financeStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { formatCurrency, formatPercent } from '../../utils/format';
 import { normalizeTransactionsToCurrency } from '../../utils/currency';
+import { TRANSFER_CATEGORIES } from '../../theme/categoryIcons';
 import type { Transaction } from '../../types';
 
 type Granularity = 'month' | 'quarter' | 'year';
@@ -26,7 +27,9 @@ function rangeForOffset(granularity: Granularity, offset: number): { start: Date
 }
 
 function expensesByCategory(transactions: Transaction[], range: { start: Date; end: Date }) {
-  const filtered = transactions.filter((t) => t.type === 'expense' && t.date >= range.start && t.date <= range.end);
+  const filtered = transactions.filter(
+    (t) => t.type === 'expense' && !TRANSFER_CATEGORIES.includes(t.category) && t.date >= range.start && t.date <= range.end
+  );
   const map = new Map<string, number>();
   for (const t of filtered) map.set(t.category, (map.get(t.category) ?? 0) + t.amount);
   return map;
